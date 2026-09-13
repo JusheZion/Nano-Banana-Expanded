@@ -17065,3 +17065,93 @@ Modified:
 ### Next steps
 
 - None beyond the authenticated browser verification above.
+
+## Complete weekly ARCS bug and architecture refactor - 2026-09-13
+
+### What changed
+
+- Stopped Codex save files and JSON exports from retaining vault-bound `blob:`
+  image URLs. Those URLs belong to one browser session, so persisted documents
+  now keep the binding and clear only the transient URL for re-resolution.
+- Made vault-image sizing abortable and document-safe. A late image load can no
+  longer add an object to a replacement document or whichever plate happens to
+  be active when the callback finishes.
+- Extracted the vault-image placement lifecycle from `CodexStudio` into a
+  focused hook and isolated intrinsic image probing behind a small promise API.
+- Made Prompt Library relationship replacement fail closed when deletion of
+  stale joins or variables fails. New joins are no longer written on top of a
+  failed cleanup.
+- Replaced Prompt Library's double assertion for Supabase query results with
+  typed query-result overrides.
+- Routed every maintained public image URL in the landing rotation, global
+  background, Comic asset library, Comic insert command, and advanced card
+  through the shared Vite `BASE_URL` resolver.
+
+### Files touched
+
+- `src/modes/codex/hooks/useVaultImagePlacement.ts`
+- `src/modes/codex/vault/vaultImages.ts`
+- `src/modes/codex/vault/__tests__/bindingResolution.test.ts`
+- `src/modes/codex/utils/codexPersistence.ts`
+- `src/modes/codex/utils/__tests__/codexPersistence.test.ts`
+- `src/portals/CodexStudio.tsx`
+- `src/portals/prompt-library/lib/promptRepository.ts`
+- `src/portals/prompt-library/lib/promptRepository.test.ts`
+- `src/shared/landingHeroRotation.ts`
+- `src/components/LandingPage.tsx`
+- `src/modes/comic/components/AssetLibrary.tsx`
+- `src/modes/comic/components/MenuBar.tsx`
+- `src/main.tsx`
+- `src/styles/theme.css`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `persistableDocument` is the single persistence-boundary sanitizer for both
+  local storage and JSON export. It creates persistence copies without
+  mutating the live canvas document or ordinary data/image sources.
+- `useVaultImagePlacement` owns cancellation, stale-document checks, target
+  plate identity, aspect-ratio sizing, and user status. `CodexStudio` now only
+  supplies current editor state and actions.
+- Supabase result typing uses the installed client's `overrideTypes` API at the
+  query boundary instead of casting through `unknown` after the query.
+- The DOX closeout found no changed ownership, durable workflow, permission, or
+  child index. Root and subtree AGENTS files were intentionally left unchanged.
+
+### Verification
+
+- Focused regressions first failed for all three reproduced Codex defects, then
+  passed after implementation: 2 files / 40 tests.
+- Prompt relationship cleanup regression failed before the error guard and
+  passed after it was added.
+- `npx tsc --noEmit -p tsconfig.app.json --pretty false` - PASS.
+- `npm run lint` - PASS, 0 errors and 0 ESLint warnings.
+- `npm run test` - PASS, 187 files / 1,643 tests.
+- `npm run build` - PASS, 2,692 modules transformed.
+- `npx vite build --base=/arcs/ --outDir=/private/tmp/arcs-base-build-20260913-001`
+  - PASS, confirming a non-root Vite base compiles all maintained asset paths.
+- In-app browser smoke - PASS for the landing page, global background, advanced
+  card background, and zero broken image elements.
+
+### Outstanding issues
+
+- The protected Codex workspace could not be exercised interactively. The
+  in-app browser has no authenticated ARCS session; the connected Chrome
+  session opened the local page but timed out twice while browser control was
+  attaching, including the documented recovery path.
+
+### Risks or caveats
+
+- Browserslist reports that `caniuse-lite` is six months old. The notice does
+  not fail the current lint, test, or build gates.
+
+### Operator follow-up
+
+- For live vault placement QA, sign into ARCS in the in-app browser or restore
+  the Chrome browser-control connection, then connect a vault and place one
+  embedded image before switching documents during image decoding.
+
+### Next steps
+
+- None in source; authenticated interaction remains the only incomplete QA
+  layer.

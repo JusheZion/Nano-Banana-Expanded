@@ -136,6 +136,26 @@ function storage(): Storage | null {
   }
 }
 
+/**
+ * Removes browser-session resources before a document crosses a persistence
+ * boundary. A vault-bound image is restored from its binding after the vault
+ * is read; its `blob:` URL belongs only to the current tab.
+ */
+function persistableDocument(doc: CodexDocument): CodexDocument {
+  return {
+    ...doc,
+    schemaVersion: CODEX_SCHEMA_VERSION,
+    plates: doc.plates.map((plate) => ({
+      ...plate,
+      objects: plate.objects.map((object) => (
+        object.kind === 'image' && object.binding && object.src.startsWith('blob:')
+          ? { ...object, src: '' }
+          : object
+      )),
+    })),
+  };
+}
+
 export function listDocuments(): CodexDocumentSummary[] {
   const store = storage();
   if (!store) return [];
@@ -153,7 +173,7 @@ export function saveDocument(doc: CodexDocument): CodexDocumentSummary[] | null 
   if (!store) return null;
 
   try {
-    const record: CodexDocument = { ...doc, schemaVersion: CODEX_SCHEMA_VERSION };
+    const record = persistableDocument(doc);
     store.setItem(DOC_PREFIX + doc.id, JSON.stringify(record));
 
     const summary: CodexDocumentSummary = {
@@ -208,7 +228,7 @@ export function migrate(doc: CodexDocument): CodexDocument | null {
 
 /** JSON export, so a codex can leave the browser and be version-controlled. */
 export function serializeDocument(doc: CodexDocument): string {
-  return JSON.stringify({ ...doc, schemaVersion: CODEX_SCHEMA_VERSION }, null, 2);
+  return JSON.stringify(persistableDocument(doc), null, 2);
 }
 
 export function deserializeDocument(raw: string): CodexDocument | null {

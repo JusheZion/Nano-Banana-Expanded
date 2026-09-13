@@ -14,6 +14,7 @@ import {
   LANDING_HERO_FALLBACK_URL,
   LANDING_HERO_ROTATION_URLS,
 } from '@/shared/landingHeroRotation';
+import { publicAssetUrl } from '@/shared/viteAssets';
 
 interface LandingPageProps {
   onNavigate?: (portal: Portal) => void;
@@ -25,6 +26,9 @@ const HERO_LINE2 = 'Create stories, images and comics all in one spot!';
 const HERO_SUBLINE =
   'Have a story idea? Enter a short summary or synopsis of your story idea, and let our ARCS application guide you through fleshing out your idea for a script or a comic book. Then use our image studios to generate images for illustrating your idea. Then use your images to create a comic book or setup an outline for video generation!';
 const VERSION_BADGE = 'v2.4.1';
+const ADVANCED_COMIC_IMAGE_URL = publicAssetUrl(
+  'assets/images/Aries%20In%20the%20Observatory.jpeg',
+);
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -372,7 +376,7 @@ function AdvancedComicLandingCard({
     >
       <div
         className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
-        style={{ backgroundImage: 'url(/assets/images/Aries%20In%20the%20Observatory.jpeg)' }}
+        style={{ backgroundImage: `url(${ADVANCED_COMIC_IMAGE_URL})` }}
       />
       <div className="absolute inset-0 bg-gradient-to-t from-[#07111f] via-[#1d4ed8]/45 to-transparent opacity-95 group-hover:opacity-85 transition-opacity" />
       <div className="absolute bottom-0 left-0 p-6 w-full">

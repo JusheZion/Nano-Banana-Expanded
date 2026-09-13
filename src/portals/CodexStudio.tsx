@@ -4,13 +4,12 @@ import {
   BookMarked, FileDown, FilePlus2, ImageDown, Layers, Plus, Redo2, Save,
   Sparkles, Trash2, Type, Undo2,
 } from 'lucide-react';
-import { useCodexStore, makeImageObject, makeSigilObject, makeTextObject } from '@/stores/codexStore';
+import { useCodexStore, makeSigilObject, makeTextObject } from '@/stores/codexStore';
 import { SigilPalette } from '@/modes/codex/components/SigilPalette';
 import { FragmentPalette } from '@/modes/codex/components/FragmentPalette';
 import { buildFragment } from '@/modes/codex/data/FragmentRegistry';
 import { groupMembers } from '@/modes/codex/utils/grouping';
-import { bindingPatch, resolveImageSrc } from '@/modes/codex/vault/vaultBinding';
-import type { ObsidianLoreEntry, ObsidianLoreImage } from '@/portals/writer/obsidianLoreImport';
+import { bindingPatch } from '@/modes/codex/vault/vaultBinding';
 import { FinishPicker } from '@/modes/codex/components/FinishPicker';
 import {
   CodexContextMenu,
@@ -54,6 +53,7 @@ import {
   writeCodexSession,
   type CodexDockTab,
 } from '@/modes/codex/utils/codexSession';
+import { useVaultImagePlacement } from '@/modes/codex/hooks/useVaultImagePlacement';
 
 const ZOOM_STEPS = [0.25, 0.35, 0.45, 0.55, 0.7, 0.85, 1, 1.25, 1.5, 2];
 
@@ -358,59 +358,15 @@ export function CodexStudio() {
     [selectedIds.length, selected, clipboard.length, canUndo, canRedo, doc.plates.length, plate, vaultStatus],
   );
 
-  /**
-   * Puts a vault picture on the plate, or points the selected picture at it.
-   *
-   * This is the only way to add a picture: the plate model has always had an
-   * image object but nothing created one, so canon art could not reach a plate
-   * at all. Placing from the vault rather than from a file picker is also what
-   * makes it a binding — the plate keeps following the note.
-   */
-  const handleUseVaultImage = useCallback(
-    (entry: ObsidianLoreEntry, image: ObsidianLoreImage) => {
-      const src = resolveImageSrc(entry, image.reference);
-      if (!src) {
-        flash('That picture could not be read from the vault.');
-        return;
-      }
-      const binding = {
-        notePath: entry.sourcePath,
-        field: image.reference,
-        mode: 'live' as const,
-        resolvedAt: new Date().toISOString(),
-      };
-
-      const existing = selected.find((o) => o.kind === 'image');
-      if (existing) {
-        applyPatches([{ id: existing.id, patch: { src, binding } as Partial<CodexObject> }]);
-        flash(`Picture bound to “${image.fileName || image.reference}”.`);
-        return;
-      }
-
-      // Size to the picture's own proportions, scaled to sit comfortably on
-      // the plate rather than landing at whatever the file happens to be.
-      const probe = new Image();
-      probe.onload = () => {
-        const ratio = probe.naturalHeight / Math.max(1, probe.naturalWidth);
-        const width = Math.min(420, plate?.width ? plate.width * 0.5 : 420);
-        const height = Math.round(width * ratio);
-        addObject(
-          makeImageObject({
-            ...placeCentre(width),
-            width,
-            height,
-            src,
-            name: image.fileName || image.reference,
-            binding,
-          }),
-        );
-        flash(`Placed “${image.fileName || image.reference}”.`);
-      };
-      probe.onerror = () => flash('That picture could not be read from the vault.');
-      probe.src = src;
-    },
-    [selected, applyPatches, addObject, placeCentre, plate, flash],
-  );
+  const handleUseVaultImage = useVaultImagePlacement({
+    documentId: doc.id,
+    plate,
+    selected,
+    placeCentre,
+    applyPatches,
+    addObject,
+    flash,
+  });
 
   /**
    * Re-reads the vault, then pushes every live binding's current value onto the

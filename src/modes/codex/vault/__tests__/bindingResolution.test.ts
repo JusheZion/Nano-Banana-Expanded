@@ -15,7 +15,13 @@ import {
   resolveField,
   resolveImageSrc,
 } from '../vaultBinding';
-import { boundableImages, findImage, heldImageUrlCount, releaseImageUrls } from '../vaultImages';
+import {
+  boundableImages,
+  findImage,
+  heldImageUrlCount,
+  probeImageDimensions,
+  releaseImageUrls,
+} from '../vaultImages';
 
 /**
  * The reported bug: choosing a note and a field wrote the binding and nothing
@@ -237,6 +243,34 @@ describe('pictures', () => {
       notePath: withArt.sourcePath, field: 'gone.png', mode: 'live',
     }) as Partial<CodexImageObject>;
     expect('src' in patch).toBe(false);
+  });
+});
+
+describe('image dimension probing', () => {
+  it('detaches a pending image probe when its placement is cancelled', async () => {
+    const probes: Array<{
+      onload: (() => void) | null;
+      onerror: (() => void) | null;
+      src: string;
+      naturalWidth: number;
+      naturalHeight: number;
+    }> = [];
+    class FakeImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      src = '';
+      naturalWidth = 800;
+      naturalHeight = 1200;
+      constructor() { probes.push(this); }
+    }
+    vi.stubGlobal('Image', FakeImage);
+    const controller = new AbortController();
+    const dimensions = probeImageDimensions('blob:test/portrait', controller.signal);
+
+    controller.abort();
+
+    await expect(dimensions).rejects.toMatchObject({ name: 'AbortError' });
+    expect(probes[0]).toMatchObject({ onload: null, onerror: null, src: '' });
   });
 });
 

@@ -84,10 +84,11 @@ export async function fetchPrompts(client: SupabaseClient, user: User): Promise<
     `,
     )
     .eq("user_id", user.id)
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .overrideTypes<DatabasePromptRow[], { merge: false }>();
 
   if (error) throw error;
-  return (((data ?? []) as unknown) as DatabasePromptRow[]).map(mapPromptRow);
+  return (data ?? []).map(mapPromptRow);
 }
 
 export async function savePrompt(
@@ -204,7 +205,12 @@ async function syncNamedJoin(
   joinColumn: string,
   names: string[],
 ) {
-  await client.from(joinTable).delete().eq("prompt_id", promptId).eq("user_id", userId);
+  const { error: deleteError } = await client
+    .from(joinTable)
+    .delete()
+    .eq("prompt_id", promptId)
+    .eq("user_id", userId);
+  if (deleteError) throw deleteError;
   const entities = await ensureNamedEntities(client, userId, table, names);
 
   if (!entities.length) return;
@@ -223,13 +229,22 @@ async function ensureNamedEntities(client: SupabaseClient, userId: string, table
   if (!names.length) return [];
 
   const rows = names.map((name) => ({ user_id: userId, name }));
-  const { data, error } = await client.from(table).upsert(rows, { onConflict: "user_id,name" }).select("id, name");
+  const { data, error } = await client
+    .from(table)
+    .upsert(rows, { onConflict: "user_id,name" })
+    .select("id, name")
+    .overrideTypes<Array<{ id: string; name: string }>, { merge: false }>();
   if (error) throw error;
-  return (data ?? []) as Array<{ id: string; name: string }>;
+  return data ?? [];
 }
 
 async function syncVariables(client: SupabaseClient, userId: string, promptId: string, variables: PromptVariable[]) {
-  await client.from("prompt_dossier_variables").delete().eq("prompt_id", promptId).eq("user_id", userId);
+  const { error: deleteError } = await client
+    .from("prompt_dossier_variables")
+    .delete()
+    .eq("prompt_id", promptId)
+    .eq("user_id", userId);
+  if (deleteError) throw deleteError;
 
   if (!variables.length) return;
 

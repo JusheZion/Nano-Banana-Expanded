@@ -61,6 +61,52 @@ export function releaseImageUrls(): void {
   urls.clear();
 }
 
+export interface ImageDimensions {
+  width: number;
+  height: number;
+}
+
+/**
+ * Reads intrinsic image dimensions with an abortable lifecycle. Keeping the
+ * DOM Image event wiring here prevents late callbacks from outliving the
+ * document or component that requested a placement.
+ */
+export function probeImageDimensions(
+  src: string,
+  signal?: AbortSignal,
+): Promise<ImageDimensions> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+
+    const cleanup = () => {
+      image.onload = null;
+      image.onerror = null;
+      signal?.removeEventListener('abort', abort);
+    };
+    const abort = () => {
+      cleanup();
+      image.src = '';
+      reject(new DOMException('Image probe cancelled.', 'AbortError'));
+    };
+
+    if (signal?.aborted) {
+      abort();
+      return;
+    }
+    image.onload = () => {
+      const dimensions = { width: image.naturalWidth, height: image.naturalHeight };
+      cleanup();
+      resolve(dimensions);
+    };
+    image.onerror = () => {
+      cleanup();
+      reject(new Error('Image dimensions could not be read.'));
+    };
+    signal?.addEventListener('abort', abort, { once: true });
+    image.src = src;
+  });
+}
+
 /** How many URLs are held. Tests only. */
 export function heldImageUrlCount(): number {
   return urls.size;

@@ -5,6 +5,7 @@ import {
   listDocuments,
   loadDocument,
   saveDocument,
+  serializeDocument,
 } from '../codexPersistence';
 
 describe('codex persistence validation', () => {
@@ -67,5 +68,41 @@ describe('codex persistence validation', () => {
     expect(listDocuments()).toEqual([]);
     expect(loadDocument('anything')).toBeNull();
     spy.mockRestore();
+  });
+
+  it('does not persist a session-only blob URL for a vault-bound image', () => {
+    const doc = createDocument();
+    doc.plates[0].objects.push({
+      id: 'portrait', kind: 'image', name: 'Portrait', x: 10, y: 20, width: 100, height: 150,
+      rotation: 0, opacity: 1, locked: false, visible: true, src: 'blob:current-session',
+      binding: { notePath: 'Characters/Kron.md', field: 'portrait.png', mode: 'live' },
+    });
+
+    expect(saveDocument(doc)).not.toBeNull();
+    expect(loadDocument(doc.id)?.plates[0].objects[0]).toMatchObject({
+      kind: 'image', src: '', binding: { notePath: 'Characters/Kron.md' },
+    });
+    expect(doc.plates[0].objects[0]).toMatchObject({ src: 'blob:current-session' });
+  });
+
+  it('strips vault blob URLs from JSON exports without changing ordinary image sources', () => {
+    const doc = createDocument();
+    doc.plates[0].objects.push(
+      {
+        id: 'bound', kind: 'image', x: 0, y: 0, width: 100, height: 100,
+        rotation: 0, opacity: 1, locked: false, visible: true, src: 'blob:current-session',
+        binding: { notePath: 'Characters/Kron.md', field: 'portrait.png', mode: 'live' },
+      },
+      {
+        id: 'ordinary', kind: 'image', x: 0, y: 0, width: 100, height: 100,
+        rotation: 0, opacity: 1, locked: false, visible: true, src: 'data:image/png;base64,abc',
+      },
+    );
+
+    const exported = deserializeDocument(serializeDocument(doc));
+    expect(exported?.plates[0].objects).toMatchObject([
+      { id: 'bound', src: '' },
+      { id: 'ordinary', src: 'data:image/png;base64,abc' },
+    ]);
   });
 });

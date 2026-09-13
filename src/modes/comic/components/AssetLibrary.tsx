@@ -2,8 +2,9 @@ import React, { useRef } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { generatePrompt } from '../utils/promptMiddleware';
 import { useShallow } from 'zustand/react/shallow';
+import { publicAssetUrl } from '@/shared/viteAssets';
 
-export const ASSETS = [
+const ASSET_PATHS = [
     '/assets/images/Anunnaki Anubis.png',
     '/assets/images/Anunnaki Sphinx.png',
     '/assets/images/Aquarius Sphere.jpg',
@@ -52,6 +53,8 @@ export const ASSETS = [
     '/assets/images/Trading Game Snippet.png',
     '/assets/images/temple of sagittarius.jpg',
 ];
+
+export const ASSETS = ASSET_PATHS.map((path) => publicAssetUrl(path));
 
 interface AssetLibraryProps {
     isOpen: boolean;

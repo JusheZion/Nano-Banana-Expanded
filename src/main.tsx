@@ -6,6 +6,12 @@ import { ThemeProvider } from '@/shared/context/ThemeContext.tsx'
 import { ProjectProvider } from '@/shared/context/ProjectContext.tsx'
 import { AuthProvider } from '@/shared/context/AuthContext'
 import { ResponsiveLayoutProvider } from '@/shared/context/ResponsiveLayoutContext'
+import { publicAssetUrl } from '@/shared/viteAssets'
+
+document.documentElement.style.setProperty(
+  '--app-background-image',
+  `url("${publicAssetUrl('assets/images/City%20of%20Aquarius.jpg')}")`,
+)
 
 /** Dev-only: confirms Vite injected the Gemini key (boolean only; never log the key). */
 if (import.meta.env.DEV) {

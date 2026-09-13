@@ -7,12 +7,13 @@ import { useComicStore } from '../../../stores/comicStore';
 import { ACCENT_GOLD_GRADIENT, ACCENT_BLUE_GRADIENT, ACCENT_GOLD_LIGHT } from '../theme/Phase12DesignTokens';
 import { useShallow } from 'zustand/react/shallow';
 import type { ComicDocumentCommands, ComicViewportControls } from './comicCommands';
+import { publicAssetUrl } from '@/shared/viteAssets';
 
 /** Solid dark blue for menu bar text (gold bar) when not hovered */
 const MENU_BAR_TEXT_BLUE = '#001a4d';
 /** Gold for hover text so it's readable on both gold bar and blue hover background */
 const HOVER_TEXT_GOLD = ACCENT_GOLD_LIGHT;
-const FIRST_STORED_IMAGE_URL = '/assets/images/Anunnaki Anubis.png';
+const FIRST_STORED_IMAGE_URL = publicAssetUrl('assets/images/Anunnaki Anubis.png');
 const SFX_OPTIONS = ['BOOM', 'ZAP', 'CRASH', 'POW', 'BAM', 'WHAM', 'SLAM', 'KAPOW', 'BANG'];
 
 export type MenuId = 'home' | 'edit' | 'view' | 'panel' | 'balloon' | 'text' | 'objects' | 'workflow' | null;

@@ -152,3 +152,54 @@
   - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remained user-owned and uncommitted.
   - The DOX pass left instruction files unchanged because the existing weekly-refactor exception already authorizes full-scope work and no new durable contract, ownership boundary, permission, or workflow was introduced.
   - No deployment, production-data mutation, live Supabase write, or credential access was performed.
+
+### 2026-09-13 00:16 EDT - Refactor: Complete weekly ARCS bug and architecture audit
+
+- Job ID: 20260913-000150-arcs-weekly-complete-refactor
+- Workflow: Heavy
+- Workflow version: lean-routing-2026-08-03
+- Model: GPT-5
+- Started: 2026-09-13 00:01 EDT
+- Finished: 2026-09-13 00:16 EDT
+- Elapsed: 15m
+- Feature or system area: Codex vault image lifecycle and persistence, Prompt Library persistence, Vite public assets
+- Initial outcome: partial - the first audit slice fixed the Codex defects before the second pass found Prompt Library and remaining Vite asset defects.
+- Outcome: success
+- Rerouted: none
+- Failed fix attempts: 1
+- Bugs:
+  - Pre-existing: 5
+  - Introduced and caught: 1
+  - Escaped regression: 0
+- Release result: success
+- Related job ID: 20260830-000149-arcs-weekly-complete-refactor
+- Files changed:
+  - 14 source and test files in Codex vault/persistence, Prompt Library persistence, shared Vite asset resolution consumers, landing/global styling, plus `walkthrough.md`.
+- Steps taken:
+  1. Re-established passing TypeScript, lint, 1,639-test, and production-build baselines, then audited all changes since the prior weekly branch baseline.
+  2. Reproduced dead vault URL persistence and uncancelled image probing with focused tests before fixing them.
+  3. Extracted a memoized vault-image placement hook and abortable intrinsic-size probe from the Codex portal.
+  4. Replaced unsafe Prompt Library query-result assertions and made relationship cleanup errors fail closed.
+  5. Routed all maintained public image consumers through Vite `BASE_URL`, including a non-root production build.
+  6. Ran full gates and browser smoke, completed the DOX pass, and preserved unrelated user changes.
+- Tests run:
+  - Baseline `npx tsc --noEmit -p tsconfig.app.json --pretty false` - passed.
+  - Baseline `npm run lint` - passed, 0 errors / 0 ESLint warnings.
+  - Baseline `npm run test` - passed, 187 files / 1,639 tests.
+  - Baseline `npm run build` - passed, 2,691 modules.
+  - Focused Codex persistence and image-probe regressions before fixes - failed as expected, 3 tests reproducing the defects.
+  - Focused Codex/Vite regressions after fixes - passed, 3 files / 42 tests.
+  - Prompt relationship cleanup regression before fix - failed as expected.
+  - Focused Prompt/Codex/Vite tests after integration - passed, 4 files / 44 tests.
+  - `npx tsc --noEmit -p tsconfig.app.json --pretty false` after integration - passed.
+  - `npm run lint` after integration - passed, 0 errors / 0 ESLint warnings.
+  - Final `npm run test` - passed, 187 files / 1,643 tests.
+  - Final `npm run build` - passed, 2,692 modules.
+  - `npx vite build --base=/arcs/ --outDir=/private/tmp/arcs-base-build-20260913-001` - passed, 2,692 modules.
+  - Browser QA - landing background/card assets and broken-image scan passed; protected Codex interaction was blocked by missing in-app authentication and repeated Chrome control-attachment timeouts.
+- Notes:
+  - The failed fix attempt was the first typed-query refactor exposing a missing `overrideTypes` method in the Prompt Repository test double; the double was updated before final gates.
+  - The five pre-existing defects are transient vault URL persistence, stale asynchronous vault placement, ignored relationship-delete errors, unchecked Prompt query typing, and root-bound public asset consumers.
+  - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remained user-owned and uncommitted.
+  - The DOX pass left AGENTS files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
+  - No deployment, production-data mutation, live Supabase write, or credential access was performed.
