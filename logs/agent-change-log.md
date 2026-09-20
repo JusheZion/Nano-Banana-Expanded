@@ -203,3 +203,50 @@
   - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remained user-owned and uncommitted.
   - The DOX pass left AGENTS files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
   - No deployment, production-data mutation, live Supabase write, or credential access was performed.
+
+### 2026-09-20 08:52 EDT - Refactor: Complete weekly ARCS reliability audit
+
+- Job ID: 20260920-084224-arcs-weekly-complete-refactor
+- Workflow: Heavy
+- Workflow version: lean-routing-2026-08-03
+- Model: GPT-5
+- Started: 2026-09-20 08:42 EDT
+- Finished: 2026-09-20 08:52 EDT
+- Elapsed: 10m
+- Feature or system area: Comic browser persistence and ImageShop import lifecycle
+- Initial outcome: partial - the first static pass was clean before focused lifecycle review reproduced storage and file-selection failures.
+- Outcome: success
+- Rerouted: none
+- Failed fix attempts: 0
+- Bugs:
+  - Pre-existing: 6
+  - Introduced and caught: 1
+  - Escaped regression: 0
+- Release result: success
+- Related job ID: 20260913-000150-arcs-weekly-complete-refactor
+- Files changed:
+  - Comic persistence, ImageShop import lifecycle, focused regressions, typed vault/persistence boundaries, and `walkthrough.md`.
+- Steps taken:
+  1. Re-established passing TypeScript, lint, 1,643-test, and production-build baselines.
+  2. Audited executable unsafe assertions, optional-value boundaries, hook dependencies, listener/timer/object-URL cleanup, large React portals, Vite environment declarations, and public asset handling.
+  3. Reproduced three IndexedDB failover failures and one stale FileReader race before implementation.
+  4. Refactored Comic persistence into explicit IndexedDB/localStorage failover and migration-cleanup operations.
+  5. Added single-reader ownership, cancellation, and stale-callback fencing to ImageShop import.
+  6. Removed unnecessary persistence and archive-thumbnail assertions, ran the complete gate, updated the walkthrough, and completed the DOX pass.
+- Tests run:
+  - Baseline `npx tsc --noEmit -p tsconfig.app.json --pretty false` - passed.
+  - Baseline `npm run lint` - passed, 0 errors / 0 ESLint warnings.
+  - Baseline `npm run test` - passed, 187 files / 1,643 tests.
+  - Baseline `npm run build` - passed, 2,692 modules.
+  - Storage regressions before fixes - failed as expected, 3 of 3 tests reproducing the defects.
+  - Rapid-file-selection regression before fix - failed as expected by uploading the stale first file.
+  - Focused integration tests after fixes - passed, 4 files / 10 tests.
+  - Final `npx tsc --noEmit -p tsconfig.app.json --pretty false` - passed.
+  - Final `npm run lint` - passed, 0 errors / 0 ESLint warnings.
+  - Final `npm run test` - passed, 188 files / 1,647 tests.
+  - Final `npm run build` - passed, 2,692 modules.
+- Notes:
+  - The introduced-and-caught issue was a regression test that initially clicked before React committed the FileReader state update; wrapping the controlled completion in `act` corrected the test before the source fix.
+  - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remain user-owned and uncommitted.
+  - The DOX pass left instruction files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
+  - No deployment, production-data mutation, live Supabase write, or credential access was performed.

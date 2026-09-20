@@ -497,7 +497,7 @@ export async function saveStorySequenceToAssetsVault(args: {
   });
 
   const metadataTags: Record<string, unknown> = {
-    [STORY_SEQUENCE_V1_KEY]: storyPayload as unknown as Record<string, unknown>,
+    [STORY_SEQUENCE_V1_KEY]: storyPayload,
     source: STORYLINE_ASSET_SOURCE,
   };
 

@@ -29,13 +29,18 @@ const idbAvailable = (): boolean => {
 let dbPromise: Promise<IDBDatabase> | null = null;
 function openDB(): Promise<IDBDatabase> {
     if (!dbPromise) {
-        dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+        const attempt = new Promise<IDBDatabase>((resolve, reject) => {
             const req = indexedDB.open(DB_NAME, 1);
             req.onupgradeneeded = () => {
                 if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
             };
             req.onsuccess = () => resolve(req.result);
             req.onerror = () => reject(req.error);
+        });
+        dbPromise = attempt.catch((error: unknown) => {
+            // A transient privacy-mode or permission failure must not poison every later retry.
+            dbPromise = null;
+            throw error;
         });
     }
     return dbPromise;
@@ -67,6 +72,14 @@ function idbDel(key: string): Promise<void> {
 }
 
 function safeLocalGet(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }
+function safeLocalSet(key: string, value: string): boolean {
+    try {
+        localStorage.setItem(key, value);
+        return true;
+    } catch {
+        return false;
+    }
+}
 function safeLocalRemove(key: string): void { try { localStorage.removeItem(key); } catch { /* ignore */ } }
 
 function emitQuotaWarning(name: string, bytes: number): void {
@@ -78,7 +91,18 @@ function emitQuotaWarning(name: string, bytes: number): void {
     try { window.dispatchEvent(new CustomEvent('arcs:storage-quota-exceeded', { detail: { name, approxBytes: bytes } })); } catch { /* non-browser */ }
 }
 
-/** Read the raw JSON string for a key: IndexedDB first, else migrate any localStorage copy in. */
+async function migrateLocalValue(name: string, sourceKey: string, value: string): Promise<void> {
+    try {
+        await idbSet(name, value);
+    } catch {
+        // Keep the only durable copy when IndexedDB exists but is temporarily unusable.
+        return;
+    }
+    safeLocalRemove(sourceKey);
+    for (const legacy of LEGACY_KEYS) safeLocalRemove(legacy);
+}
+
+/** Read the raw JSON string for a key, preferring an authoritative fallback write when present. */
 async function readRaw(name: string): Promise<string | null> {
     if (!idbAvailable()) {
         const current = safeLocalGet(name);
@@ -86,13 +110,20 @@ async function readRaw(name: string): Promise<string | null> {
         for (const legacy of LEGACY_KEYS) { const v = safeLocalGet(legacy); if (v) return v; }
         return null;
     }
+
+    // writeRaw stores the newest snapshot here when IndexedDB fails. Read it before an older
+    // IndexedDB value, and remove it only after a successful migration.
+    const fallback = safeLocalGet(name);
+    if (fallback) {
+        await migrateLocalValue(name, name, fallback);
+        return fallback;
+    }
+
     try { const fromIdb = await idbGet(name); if (fromIdb) return fromIdb; } catch { /* fall through */ }
-    for (const key of [name, ...LEGACY_KEYS]) {
+    for (const key of LEGACY_KEYS) {
         const v = safeLocalGet(key);
         if (v) {
-            try { await idbSet(name, v); } catch { /* still return the value */ }
-            safeLocalRemove(name);
-            for (const legacy of LEGACY_KEYS) safeLocalRemove(legacy);
+            await migrateLocalValue(name, key, v);
             return v;
         }
     }
@@ -102,10 +133,15 @@ async function readRaw(name: string): Promise<string | null> {
 /** Write the raw JSON string for a key (IndexedDB, else localStorage), surfacing quota failures. */
 async function writeRaw(name: string, json: string): Promise<void> {
     if (!idbAvailable()) {
-        try { localStorage.setItem(name, json); } catch { emitQuotaWarning(name, json.length); }
+        if (!safeLocalSet(name, json)) emitQuotaWarning(name, json.length);
         return;
     }
-    try { await idbSet(name, json); } catch { emitQuotaWarning(name, json.length); }
+    try {
+        await idbSet(name, json);
+        safeLocalRemove(name);
+    } catch {
+        if (!safeLocalSet(name, json)) emitQuotaWarning(name, json.length);
+    }
 }
 
 // --- Debounced flush state (module-level; one comic store) ---
@@ -159,8 +195,17 @@ export function createComicPersistStorage<S>(): PersistStorage<S> {
             scheduleFlush();
         },
         removeItem: async (name: string): Promise<void> => {
-            if (pendingName === name) { pendingValue = null; }
-            if (!idbAvailable()) { safeLocalRemove(name); return; }
+            if (pendingName === name) {
+                pendingName = null;
+                pendingValue = null;
+                if (flushTimer) {
+                    clearTimeout(flushTimer);
+                    flushTimer = null;
+                }
+            }
+            safeLocalRemove(name);
+            for (const legacy of LEGACY_KEYS) safeLocalRemove(legacy);
+            if (!idbAvailable()) return;
             try { await idbDel(name); } catch { /* ignore */ }
         },
     };

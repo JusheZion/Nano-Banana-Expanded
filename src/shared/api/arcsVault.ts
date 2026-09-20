@@ -123,7 +123,7 @@ export async function getCharacterAlbums(): Promise<VaultCharacterAlbum[]> {
             | { x?: number; y?: number; scale?: number }
             | undefined;
           const hasThumb =
-            at &&
+            at != null &&
             (typeof at.x === 'number' ||
               typeof at.y === 'number' ||
               typeof at.scale === 'number');
@@ -137,14 +137,13 @@ export async function getCharacterAlbums(): Promise<VaultCharacterAlbum[]> {
             created_at: (row.created_at as string | null) ?? null,
             is_profile_cover: (row.is_profile_cover as boolean | null) ?? null,
           };
-          return hasThumb
-            ? {
-                ...base,
-                thumbnail_focus_x: typeof at!.x === 'number' ? at!.x! : 50,
-                thumbnail_focus_y: typeof at!.y === 'number' ? at!.y! : 50,
-                thumbnail_scale: typeof at!.scale === 'number' ? at!.scale! : 1,
-              }
-            : base;
+          if (!hasThumb || at == null) return base;
+          return {
+            ...base,
+            thumbnail_focus_x: typeof at.x === 'number' ? at.x : 50,
+            thumbnail_focus_y: typeof at.y === 'number' ? at.y : 50,
+            thumbnail_scale: typeof at.scale === 'number' ? at.scale : 1,
+          };
         }) as VaultCharacterItem[];
         return groupAlbums(list);
       }

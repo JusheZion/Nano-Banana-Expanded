@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { generateImage, type OnyxModelId } from '@/shared/api/geminiImageApi';
 import {
   saveImportedImageToAssetVault,
@@ -44,6 +44,7 @@ type ImageshopProcessingSnapshot = {
 };
 
 export function ImageshopImportPanel() {
+  const importReaderRef = useRef<FileReader | null>(null);
   const [importObjectUrl, setImportObjectUrl] = useState<string | null>(null);
   const [importOriginalDataUrl, setImportOriginalDataUrl] = useState<string | null>(null);
   const [importFileName, setImportFileName] = useState<string>('');
@@ -122,6 +123,14 @@ export function ImageshopImportPanel() {
     };
   }, [importObjectUrl]);
 
+  useEffect(() => {
+    return () => {
+      const reader = importReaderRef.current;
+      importReaderRef.current = null;
+      reader?.abort();
+    };
+  }, []);
+
   const loadProfileOptions = useCallback(() => {
     if (!supabaseReady) return;
     setVaultProfileLoading(true);
@@ -150,6 +159,9 @@ export function ImageshopImportPanel() {
 
   const onPickFile = useCallback(
     (files: FileList | null) => {
+      const previousReader = importReaderRef.current;
+      importReaderRef.current = null;
+      previousReader?.abort();
       setImportError(null);
       setImportSaveError(null);
       setImportSaveNotice(null);
@@ -181,12 +193,18 @@ export function ImageshopImportPanel() {
       });
       setImportFileName(file.name);
       const reader = new FileReader();
+      importReaderRef.current = reader;
       reader.onload = () => {
+        if (importReaderRef.current !== reader) return;
         if (typeof reader.result === 'string') setImportOriginalDataUrl(reader.result);
       };
       reader.onerror = () => {
+        if (importReaderRef.current !== reader) return;
         setImportOriginalDataUrl(null);
         setImportError('Could not prepare this image for direct vault upload.');
+      };
+      reader.onloadend = () => {
+        if (importReaderRef.current === reader) importReaderRef.current = null;
       };
       reader.readAsDataURL(file);
     },

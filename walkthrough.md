@@ -17155,3 +17155,80 @@ Modified:
 
 - None in source; authenticated interaction remains the only incomplete QA
   layer.
+
+## Weekly ARCS persistence and importer reliability audit - 2026-09-20
+
+### What changed
+
+- Made Comic autosave honor its documented localStorage fallback when
+  IndexedDB exists but cannot open or write. A working fallback no longer
+  produces a false storage-quota warning.
+- Preserved the fallback as the authoritative newest snapshot until migration
+  to IndexedDB succeeds. A failed migration no longer deletes the only durable
+  project copy.
+- Removed current and legacy fallback copies when a project is deleted, even if
+  IndexedDB deletion fails, so deleted projects cannot reappear on the next
+  read.
+- Reset a rejected IndexedDB connection attempt so a transient browser or
+  privacy-mode failure can recover on a later operation.
+- Cancelled superseded and unmounted ImageShop FileReaders and fenced their
+  callbacks by identity. Selecting two files quickly can no longer let the
+  older read overwrite and upload the newer selection.
+- Removed an unnecessary double assertion from story-sequence metadata and
+  replaced archive-thumbnail non-null assertions with explicit narrowing.
+
+### Files touched
+
+- `src/shared/lib/idbComicStorage.ts`
+- `src/shared/lib/__tests__/idbComicStorage.test.ts`
+- `src/portals/storyline/ImageshopImportPanel.tsx`
+- `src/portals/storyline/__tests__/ImageshopImportPanel.test.tsx`
+- `src/shared/api/arcsPersistence.ts`
+- `src/shared/api/arcsVault.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The storage adapter now treats localStorage as an explicit failover tier:
+  fallback writes are preferred over possibly stale IndexedDB data, migration
+  cleanup occurs only after a successful IndexedDB write, and deletion clears
+  every tier.
+- ImageShop owns exactly one active FileReader. Replacing a file aborts the
+  prior reader, callback identity checks reject late events, and unmount aborts
+  the remaining read.
+- The large-portal, hook dependency, listener/timer, object-URL, TypeScript,
+  Vite environment, and public-asset sweep found no additional confirmed
+  defect. No speculative memoization or component split was added without an
+  observed render boundary or ownership seam.
+- The DOX closeout left `AGENTS.md` unchanged because this work did not alter a
+  durable contract, ownership boundary, workflow, permission, or child index.
+
+### Verification
+
+- Three storage regressions failed against the prior implementation and passed
+  after the failover refactor.
+- The rapid-file-selection regression uploaded the older file against the
+  prior implementation and the current file after the lifecycle fix.
+- Focused verification: 4 files / 10 tests passed.
+- `npx tsc --noEmit -p tsconfig.app.json --pretty false` - PASS.
+- `npm run lint` - PASS, 0 errors and 0 ESLint warnings.
+- `npm run test` - PASS, 188 files / 1,647 tests.
+- `npm run build` - PASS, 2,692 modules transformed.
+
+### Outstanding issues
+
+- None in the audited code paths.
+
+### Risks or caveats
+
+- Browserslist reports that `caniuse-lite` is six months old. This remains a
+  non-blocking maintenance notice and was not changed during the audit.
+- No live Supabase write, deployment, or production-data mutation was needed.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- Continue the scheduled weekly audit from this verified baseline.
