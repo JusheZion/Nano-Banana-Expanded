@@ -15,6 +15,11 @@ const generationMocks = vi.hoisted(() => ({
   saveGeneration: vi.fn(),
 }));
 
+const vaultMocks = vi.hoisted(() => ({
+  getCharacterAlbums: vi.fn(),
+  getAssetAlbums: vi.fn(),
+}));
+
 vi.mock('@/shared/api/arcsPersistence', () => persistenceMocks);
 
 vi.mock('@/shared/api/geminiImageApi', async (importOriginal) => {
@@ -28,13 +33,9 @@ vi.mock('@/shared/lib/supabase', () => ({
   isSupabaseConfigured: () => true,
 }));
 
-vi.mock('@/shared/api/arcsVault', () => ({
-  getCharacterAlbums: vi.fn(async () => []),
-}));
+vi.mock('@/shared/api/arcsVault', () => ({ getCharacterAlbums: vaultMocks.getCharacterAlbums }));
 
-vi.mock('@/shared/api/arcsAssetVault', () => ({
-  getAssetAlbums: vi.fn(async () => []),
-}));
+vi.mock('@/shared/api/arcsAssetVault', () => ({ getAssetAlbums: vaultMocks.getAssetAlbums }));
 
 vi.mock('@/components/ui/ArcsStorageImg', () => ({
   ArcsStorageImg: ({ alt = '' }: { alt?: string }) => <img alt={alt} />,
@@ -49,11 +50,23 @@ vi.mock('@/shared/components/SearchableVaultSelect', () => ({
     label,
     value,
     onChange,
+    options,
+    loading,
   }: {
     label: string;
     value: string;
     onChange: (value: string) => void;
-  }) => <input aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} />,
+    options: string[];
+    loading?: boolean;
+  }) => (
+    <input
+      aria-label={label}
+      value={value}
+      data-options={options.join('|')}
+      data-loading={loading ? 'true' : 'false'}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  ),
 }));
 
 beforeEach(() => {
@@ -77,13 +90,51 @@ beforeEach(() => {
     imageUrl: 'data:image/png;base64,saved',
   });
   generationMocks.saveGeneration.mockReset();
+  vaultMocks.getCharacterAlbums.mockReset();
+  vaultMocks.getCharacterAlbums.mockResolvedValue([]);
+  vaultMocks.getAssetAlbums.mockReset();
+  vaultMocks.getAssetAlbums.mockResolvedValue([]);
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+function deferred<T>() {
+  let settle: ((value: T) => void) | undefined;
+  const promise = new Promise<T>((resolve) => {
+    settle = resolve;
+  });
+  return {
+    promise,
+    resolve(value: T) {
+      if (!settle) throw new Error('Deferred promise was not initialized');
+      settle(value);
+    },
+  };
+}
+
 describe('ImageshopImportPanel', () => {
+  it('keeps the newest profile options when an older vault request finishes last', async () => {
+    const older = deferred<Array<{ profileName: string }>>();
+    const newer = deferred<Array<{ profileName: string }>>();
+    vaultMocks.getCharacterAlbums
+      .mockImplementationOnce(() => older.promise)
+      .mockImplementationOnce(() => newer.promise);
+
+    render(<ImageshopImportPanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Character Vault' }));
+    fireEvent.click(screen.getByRole('button', { name: 'NPC Vault (local)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Character Vault' }));
+
+    await act(async () => newer.resolve([{ profileName: 'Current profile' }]));
+    const profileInput = await screen.findByLabelText('Profile name');
+    expect(profileInput.getAttribute('data-options')).toBe('Current profile');
+
+    await act(async () => older.resolve([{ profileName: 'Stale profile' }]));
+    expect(profileInput.getAttribute('data-options')).toBe('Current profile');
+  });
+
   it('ignores a stale FileReader result after a newer file is selected', async () => {
     const readers: ControlledFileReader[] = [];
     class ControlledFileReader {

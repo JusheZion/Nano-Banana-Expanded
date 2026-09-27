@@ -4,8 +4,6 @@ import {
   saveImportedImageToAssetVault,
   saveImportedImageToCharacterVault,
 } from '@/shared/api/arcsPersistence';
-import { getCharacterAlbums } from '@/shared/api/arcsVault';
-import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
 import { isSupabaseConfigured } from '@/shared/lib/supabase';
 import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
 import { Tooltip } from '@/shared/components/Tooltip';
@@ -23,6 +21,10 @@ import {
   buildImageshopImportPrompt,
   IMAGESHOP_IMPORT_MAX_FILE_BYTES,
 } from '@/portals/storyline/imageshopImportPrompt';
+import {
+  useImageshopVaultOptions,
+  type VaultOptionTarget,
+} from '@/shared/hooks/useVaultOptions';
 
 function formatGeminiClientError(message: string): string {
   if (message.includes('VITE_GEMINI_API_KEY')) {
@@ -31,15 +33,13 @@ function formatGeminiClientError(message: string): string {
   return message;
 }
 
-type VaultTarget = 'character' | 'asset' | 'npc';
-
 /** Options that were used for the last successful `generateImage` call (paired with `importSeed`). */
 type ImageshopProcessingSnapshot = {
   retouch: boolean;
   stylePreset?: string;
   styleExtra?: string;
   aspectRatio: StoryBeatAspectRatio;
-  vaultTarget: VaultTarget;
+  vaultTarget: VaultOptionTarget;
   userNote?: string;
 };
 
@@ -53,7 +53,7 @@ export function ImageshopImportPanel() {
   const [importStyleExtra, setImportStyleExtra] = useState('');
   const [importUserNote, setImportUserNote] = useState('');
   const [importAspect, setImportAspect] = useState<StoryBeatAspectRatio>('9:16');
-  const [importVaultTarget, setImportVaultTarget] = useState<VaultTarget>('npc');
+  const [importVaultTarget, setImportVaultTarget] = useState<VaultOptionTarget>('npc');
   const [importProcessedUrl, setImportProcessedUrl] = useState<string | null>(null);
   /** Metadata for `processing` in vault saves — frozen at generation time (with `importSeed`), not live UI. */
   const [importProcessingSnapshot, setImportProcessingSnapshot] =
@@ -71,13 +71,9 @@ export function ImageshopImportPanel() {
   const [assetName, setAssetName] = useState('');
   const [npcLabel, setNpcLabel] = useState('Imported ref');
 
-  const [vaultProfileOptions, setVaultProfileOptions] = useState<string[]>([]);
-  const [vaultProfileLoading, setVaultProfileLoading] = useState(false);
-  const [vaultCollectionOptions, setVaultCollectionOptions] = useState<string[]>([]);
-  const [vaultCollectionLoading, setVaultCollectionLoading] = useState(false);
-
   const modelId: OnyxModelId = 'pro';
   const supabaseReady = isSupabaseConfigured();
+  const { profiles, collections } = useImageshopVaultOptions(importVaultTarget, supabaseReady);
 
   const labContext = importVaultTarget === 'asset' ? 'asset' : 'character';
 
@@ -130,32 +126,6 @@ export function ImageshopImportPanel() {
       reader?.abort();
     };
   }, []);
-
-  const loadProfileOptions = useCallback(() => {
-    if (!supabaseReady) return;
-    setVaultProfileLoading(true);
-    getCharacterAlbums()
-      .then((albums) => setVaultProfileOptions(albums.map((a) => a.profileName)))
-      .catch(() => setVaultProfileOptions([]))
-      .finally(() => setVaultProfileLoading(false));
-  }, [supabaseReady]);
-
-  const loadCollectionOptions = useCallback(() => {
-    if (!supabaseReady) return;
-    setVaultCollectionLoading(true);
-    getAssetAlbums()
-      .then((albums) => setVaultCollectionOptions(albums.map((a) => a.collectionName)))
-      .catch(() => setVaultCollectionOptions([]))
-      .finally(() => setVaultCollectionLoading(false));
-  }, [supabaseReady]);
-
-  useEffect(() => {
-    if (importVaultTarget === 'character') void loadProfileOptions();
-  }, [importVaultTarget, loadProfileOptions]);
-
-  useEffect(() => {
-    if (importVaultTarget === 'asset') void loadCollectionOptions();
-  }, [importVaultTarget, loadCollectionOptions]);
 
   const onPickFile = useCallback(
     (files: FileList | null) => {
@@ -272,9 +242,9 @@ export function ImageshopImportPanel() {
       const q = typed.trim();
       if (!q) return null;
       const lower = q.toLowerCase();
-      return vaultProfileOptions.find((p) => p.toLowerCase() === lower) ?? null;
+      return profiles.options.find((p) => p.toLowerCase() === lower) ?? null;
     },
-    [vaultProfileOptions]
+    [profiles.options]
   );
 
   const getMatchedCollection = useCallback(
@@ -282,9 +252,9 @@ export function ImageshopImportPanel() {
       const q = typed.trim();
       if (!q) return null;
       const lower = q.toLowerCase();
-      return vaultCollectionOptions.find((c) => c.toLowerCase() === lower) ?? null;
+      return collections.options.find((c) => c.toLowerCase() === lower) ?? null;
     },
-    [vaultCollectionOptions]
+    [collections.options]
   );
 
   const handleSave = useCallback(async (source: 'processed' | 'original' = 'processed') => {
@@ -611,8 +581,8 @@ export function ImageshopImportPanel() {
             label="Profile name"
             value={profileName}
             onChange={setProfileName}
-            options={vaultProfileOptions}
-            loading={vaultProfileLoading}
+            options={profiles.options}
+            loading={profiles.loading}
             placeholder="New profile or pick existing…"
             helperSlot={
               <p className="text-[10px] text-white/45">
@@ -640,8 +610,8 @@ export function ImageshopImportPanel() {
             label="Collection name"
             value={collectionName}
             onChange={setCollectionName}
-            options={vaultCollectionOptions}
-            loading={vaultCollectionLoading}
+            options={collections.options}
+            loading={collections.loading}
             placeholder="New collection or pick existing…"
             helperSlot={
               <p className="text-[10px] text-white/45">

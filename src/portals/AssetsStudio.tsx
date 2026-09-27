@@ -46,7 +46,7 @@ import { getStoryPhotoCollections, addCharacterRefToStory } from '@/shared/utils
 import { generateImage, referenceUrlToBase64WithMimeRetry } from '@/shared/api/geminiImageApi';
 import { generateGeminiTextFromImage } from '@/shared/api/geminiTextApi';
 import { saveAssetToDb } from '@/shared/api/arcsPersistence';
-import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
+import { useAssetVaultOptions } from '@/shared/hooks/useVaultOptions';
 import {
   addCachedGeneration,
   getCachedGenerations,
@@ -97,8 +97,11 @@ export const AssetsStudio: React.FC = () => {
   const [saveAssetCollectionName, setSaveAssetCollectionName] = useState('');
   const [saveAssetAssetName, setSaveAssetAssetName] = useState('');
   const [saveAssetMode, setSaveAssetMode] = useState<'new' | 'library'>('new');
-  const [vaultCollectionOptions, setVaultCollectionOptions] = useState<string[]>([]);
-  const [vaultCollectionLoading, setVaultCollectionLoading] = useState(false);
+  const {
+    options: vaultCollectionOptions,
+    loading: vaultCollectionLoading,
+    refresh: refreshVaultCollections,
+  } = useAssetVaultOptions();
   const [recentAssets, setRecentAssets] = useState<RecentGeneration[]>([]);
   const [promptPanelTab, setPromptPanelTab] = useState<'auto' | 'reference' | 'edit' | 'refine'>(
     'auto'
@@ -484,11 +487,7 @@ export const AssetsStudio: React.FC = () => {
     setSaveAssetMode(mode);
     setShowSaveAssetModal(true);
 
-    setVaultCollectionLoading(true);
-    getAssetAlbums()
-      .then((albums) => setVaultCollectionOptions(albums.map((a) => a.collectionName)))
-      .catch(() => setVaultCollectionOptions([]))
-      .finally(() => setVaultCollectionLoading(false));
+    void refreshVaultCollections();
   };
 
   const handleSaveAssetModalConfirm = async () => {
@@ -502,8 +501,9 @@ export const AssetsStudio: React.FC = () => {
 
     const matchedExistingCollection =
       saveAssetMode === 'library'
-        ? getMatchedExistingCollection(typedCollectionDisplay)!
+        ? getMatchedExistingCollection(typedCollectionDisplay)
         : typedCollectionDisplay;
+    if (!matchedExistingCollection) return;
 
     const isUnnamed = matchedExistingCollection.toLowerCase() === 'unnamed';
     const baseNameForId = isUnnamed ? 'Unnamed' : matchedExistingCollection;

@@ -250,3 +250,50 @@
   - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remain user-owned and uncommitted.
   - The DOX pass left instruction files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
   - No deployment, production-data mutation, live Supabase write, or credential access was performed.
+
+### 2026-09-27 00:21 EDT - Refactor: Centralize vault option request ownership
+
+- Job ID: 20260927-000936-arcs-weekly-vault-options
+- Workflow: Heavy
+- Workflow version: lean-routing-2026-08-03
+- Model: GPT-5
+- Started: 2026-09-27 00:09 EDT
+- Finished: 2026-09-27 00:21 EDT
+- Elapsed: 12m
+- Feature or system area: Vault option loading across ImageShop and studio save workflows
+- Initial outcome: partial - the first regression reproduced one ImageShop stale-response race before the same duplicated lifecycle pattern was found in four additional callers.
+- Outcome: success
+- Rerouted: none
+- Failed fix attempts: 0
+- Bugs:
+  - Pre-existing: 6
+  - Introduced and caught: 2
+  - Escaped regression: 0
+- Release result: success
+- Related job ID: 20260920-084224-arcs-weekly-complete-refactor
+- Files changed:
+  - Shared vault-option hook, five consuming workflows, one focused regression, Asset vault narrowing, `walkthrough.md`, and this log.
+- Steps taken:
+  1. Re-established passing TypeScript, lint, 1,648-test, and production-build baselines and audited the full TypeScript/React/Vite risk surface.
+  2. Reproduced an older Character-album request overwriting the newest ImageShop selection during rapid destination switching.
+  3. Extracted typed latest-request ownership, cancellation, loading, error recovery, and unmount invalidation into `useVaultOptions`.
+  4. Migrated ImageShop import and generation, Character Studio, Asset Studio, and Storyline Studio away from duplicated async option state.
+  5. Removed unsafe save-match and Asset thumbnail assertions, ran focused and full gates, attempted protected-route browser QA, and completed the DOX pass.
+- Tests run:
+  - Baseline/final `npx tsc --noEmit -p tsconfig.app.json --pretty false` - passed.
+  - Baseline/final `npm run lint` - passed, 0 errors / 0 ESLint warnings.
+  - Final `npm run test` - passed, 188 files / 1,648 tests.
+  - Final `npm run build` - passed, 2,693 modules.
+  - Async-ordering regression before fix - failed as expected by rendering `Stale profile`.
+  - Focused ImageShop verification after fix - passed, 2 files / 33 tests.
+  - Focused Storyline/ImageShop verification after integration - passed, 2 files / 5 tests.
+  - Focused Asset vault verification - passed, 1 file / 3 tests.
+  - Browser smoke - local landing page and protected ImageShop route loaded; interactive QA stopped at `Sign in to continue` because no authenticated session was available.
+- Notes:
+  - The introduced-and-caught issues were two missed local aliases during the first typed-hook integration and an initial exhaustive-dependencies warning; both were corrected before focused and full gates.
+  - One focused command named two nonexistent store-test paths and returned `No test files found`; this was corrected by running the maintained focused and full suites and was not a source-code failure.
+  - The six pre-existing defects are stale option publication in the ImageShop import, ImageShop generation, Character Studio, Asset Studio, and Storyline Studio workflows, plus unsafe optional Asset thumbnail parsing.
+  - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remained user-owned and uncommitted.
+  - The DOX pass left AGENTS files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
+  - Playwright diagnostic artifacts created by this audit were removed after browser QA.
+  - No deployment, production-data mutation, live Supabase write, or credential access was performed.

@@ -16,8 +16,6 @@ import {
   saveImportedImageToAssetVault,
   saveImportedImageToCharacterVault,
 } from '@/shared/api/arcsPersistence';
-import { getCharacterAlbums } from '@/shared/api/arcsVault';
-import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
 import { isSupabaseConfigured } from '@/shared/lib/supabase';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
@@ -49,6 +47,10 @@ import {
   type StudioPreviewAspectId,
 } from '@/shared/utils/studioPreviewLayout';
 import { ImageshopImportPanel } from '@/portals/storyline/ImageshopImportPanel';
+import {
+  useImageshopVaultOptions,
+  type VaultOptionTarget,
+} from '@/shared/hooks/useVaultOptions';
 import { ImageshopGenerationCockpit } from '@/portals/storyline/components/ImageshopGenerationCockpit';
 import { ImageshopOutputDestinations } from '@/portals/storyline/components/ImageshopOutputDestinations';
 import { ImageshopGuidedHeader, ImageshopSurfaceTabs, type ImageshopSurfaceTab } from '@/portals/storyline/components/ImageshopNavigation';
@@ -130,8 +132,6 @@ import {
 import { useImageshopSessionStore, type ImageshopSessionResult } from '@/stores/imageshopSessionStore';
 
 type LabContext = 'character' | 'asset';
-type GeneratedVaultTarget = 'character' | 'asset' | 'npc';
-
 function laneForStandaloneReference(
   reference: GuidedImageWorkshopReference,
   context: LabContext,
@@ -336,7 +336,7 @@ export function GenericImageLabPanel({
   const [guidedHandoffContext, setGuidedHandoffContext] = useState<GuidedImageWorkshopHandoff | null>(null);
   const [guidedPanelTarget, setGuidedPanelTarget] = useState<GuidedImageWorkshopHandoff | null>(null);
   const [guidedPromptTracksReferences, setGuidedPromptTracksReferences] = useState(false);
-  const [generatedVaultTarget, setGeneratedVaultTarget] = useState<GeneratedVaultTarget>('npc');
+  const [generatedVaultTarget, setGeneratedVaultTarget] = useState<VaultOptionTarget>('npc');
   const [generatedProfileName, setGeneratedProfileName] = useState('');
   const [generatedCastName, setGeneratedCastName] = useState('');
   const [generatedCollectionName, setGeneratedCollectionName] = useState('');
@@ -345,11 +345,8 @@ export function GenericImageLabPanel({
   const [generatedSavePending, setGeneratedSavePending] = useState(false);
   const [generatedSaveError, setGeneratedSaveError] = useState<string | null>(null);
   const [generatedSaveNotice, setGeneratedSaveNotice] = useState<string | null>(null);
-  const [vaultProfileOptions, setVaultProfileOptions] = useState<string[]>([]);
-  const [vaultProfileLoading, setVaultProfileLoading] = useState(false);
-  const [vaultCollectionOptions, setVaultCollectionOptions] = useState<string[]>([]);
-  const [vaultCollectionLoading, setVaultCollectionLoading] = useState(false);
   const supabaseReady = isSupabaseConfigured();
+  const { profiles, collections } = useImageshopVaultOptions(generatedVaultTarget, supabaseReady);
   const sessionResults = useImageshopSessionStore((s) => s.results);
   const activeSessionResultId = useImageshopSessionStore((s) => s.activeResultId);
   const addSessionResult = useImageshopSessionStore((s) => s.addResult);
@@ -565,40 +562,14 @@ export function GenericImageLabPanel({
     onSeedPromptConsumed?.();
   }, [seedPrompt, onSeedPromptConsumed, updatePromptSection]);
 
-  const loadProfileOptions = useCallback(() => {
-    if (!supabaseReady) return;
-    setVaultProfileLoading(true);
-    getCharacterAlbums()
-      .then((albums) => setVaultProfileOptions(albums.map((album) => album.profileName)))
-      .catch(() => setVaultProfileOptions([]))
-      .finally(() => setVaultProfileLoading(false));
-  }, [supabaseReady]);
-
-  const loadCollectionOptions = useCallback(() => {
-    if (!supabaseReady) return;
-    setVaultCollectionLoading(true);
-    getAssetAlbums()
-      .then((albums) => setVaultCollectionOptions(albums.map((album) => album.collectionName)))
-      .catch(() => setVaultCollectionOptions([]))
-      .finally(() => setVaultCollectionLoading(false));
-  }, [supabaseReady]);
-
-  useEffect(() => {
-    if (generatedVaultTarget === 'character') void loadProfileOptions();
-  }, [generatedVaultTarget, loadProfileOptions]);
-
-  useEffect(() => {
-    if (generatedVaultTarget === 'asset') void loadCollectionOptions();
-  }, [generatedVaultTarget, loadCollectionOptions]);
-
   const getMatchedProfile = useCallback(
     (typed: string): string | null => {
       const q = typed.trim();
       if (!q) return null;
       const lower = q.toLowerCase();
-      return vaultProfileOptions.find((profile) => profile.toLowerCase() === lower) ?? null;
+      return profiles.options.find((profile) => profile.toLowerCase() === lower) ?? null;
     },
-    [vaultProfileOptions],
+    [profiles.options],
   );
 
   const getMatchedCollection = useCallback(
@@ -606,9 +577,9 @@ export function GenericImageLabPanel({
       const q = typed.trim();
       if (!q) return null;
       const lower = q.toLowerCase();
-      return vaultCollectionOptions.find((collection) => collection.toLowerCase() === lower) ?? null;
+      return collections.options.find((collection) => collection.toLowerCase() === lower) ?? null;
     },
-    [vaultCollectionOptions],
+    [collections.options],
   );
 
   const stableRefs = useMemo(
@@ -2653,7 +2624,7 @@ export function GenericImageLabPanel({
   const canUseWriterImageMap = Boolean(writerImageMap?.pages.some((page) => page.panels.length > 0));
 
   const chooseVaultOutputTarget = useCallback(
-    (target: GeneratedVaultTarget) => {
+    (target: VaultOptionTarget) => {
       setGeneratedVaultTarget(target);
       setGeneratedSaveError(null);
       setGeneratedSaveNotice(null);
@@ -3484,7 +3455,7 @@ export function GenericImageLabPanel({
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {(['npc', 'character', 'asset'] as GeneratedVaultTarget[]).map((target) => (
+                  {(['npc', 'character', 'asset'] as VaultOptionTarget[]).map((target) => (
                     <button
                       key={target}
                       type="button"
@@ -3518,8 +3489,8 @@ export function GenericImageLabPanel({
                       labelClassName="text-[10px] text-white/45 uppercase"
                       value={generatedProfileName}
                       onChange={setGeneratedProfileName}
-                      options={vaultProfileOptions}
-                      loading={vaultProfileLoading}
+                      options={profiles.options}
+                      loading={profiles.loading}
                       placeholder="Type or choose profile"
                       inputClassName="mt-0.5 w-full rounded-lg bg-black/30 border border-white/15 px-2 py-1.5 text-xs"
                       wrapClassName="relative"
@@ -3557,8 +3528,8 @@ export function GenericImageLabPanel({
                       labelClassName="text-[10px] text-white/45 uppercase"
                       value={generatedCollectionName}
                       onChange={setGeneratedCollectionName}
-                      options={vaultCollectionOptions}
-                      loading={vaultCollectionLoading}
+                      options={collections.options}
+                      loading={collections.loading}
                       placeholder="Type or choose collection"
                       inputClassName="mt-0.5 w-full rounded-lg bg-black/30 border border-white/15 px-2 py-1.5 text-xs"
                       wrapClassName="relative"

@@ -57,7 +57,7 @@ import { getStoryPhotoCollections, addCharacterRefToStory } from '@/shared/utils
 import { generateImage, referenceUrlToBase64WithMimeRetry } from '@/shared/api/geminiImageApi';
 import { generateGeminiTextFromImage } from '@/shared/api/geminiTextApi';
 import { saveCharacterToDb } from '@/shared/api/arcsPersistence';
-import { getCharacterAlbums } from '@/shared/api/arcsVault';
+import { useCharacterVaultOptions } from '@/shared/hooks/useVaultOptions';
 import {
   addCachedGeneration,
   getCachedGenerations,
@@ -118,8 +118,11 @@ export const CharacterStudio: React.FC = () => {
   const [saveCharacterIsEditProfile, setSaveCharacterIsEditProfile] = useState(false);
   const [saveCharacterError, setSaveCharacterError] = useState<string | null>(null);
   const [saveCharacterSubmitting, setSaveCharacterSubmitting] = useState(false);
-  const [vaultProfileOptions, setVaultProfileOptions] = useState<string[]>([]);
-  const [vaultProfileLoading, setVaultProfileLoading] = useState(false);
+  const {
+    options: vaultProfileOptions,
+    loading: vaultProfileLoading,
+    refresh: refreshVaultProfiles,
+  } = useCharacterVaultOptions();
   const [recentCharacters, setRecentCharacters] = useState<RecentGeneration[]>([]);
   const [promptPanelTab, setPromptPanelTab] = useState<'auto' | 'reference' | 'edit' | 'refine'>('auto');
   const [snippetNameInput, setSnippetNameInput] = useState('');
@@ -573,11 +576,7 @@ export const CharacterStudio: React.FC = () => {
     setSaveCharacterError(null);
     setShowSaveCharacterModal(true);
 
-    setVaultProfileLoading(true);
-    getCharacterAlbums()
-      .then((albums) => setVaultProfileOptions(albums.map((a) => a.profileName)))
-      .catch(() => setVaultProfileOptions([]))
-      .finally(() => setVaultProfileLoading(false));
+    void refreshVaultProfiles();
   };
 
   const handleSaveCharacterModalConfirm = async () => {
@@ -596,8 +595,9 @@ export const CharacterStudio: React.FC = () => {
     }
 
     const matchedExistingProfile = saveCharacterIsEditProfile
-      ? getMatchedExistingProfile(typedProfileDisplay)!
+      ? getMatchedExistingProfile(typedProfileDisplay)
       : typedProfileDisplay;
+    if (!matchedExistingProfile) return;
 
     const isUnnamed = matchedExistingProfile.toLowerCase() === 'unnamed';
     const baseNameForId = isUnnamed ? 'Unnamed' : matchedExistingProfile;

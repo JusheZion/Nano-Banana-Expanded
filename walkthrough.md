@@ -17232,3 +17232,82 @@ Modified:
 ### Next steps
 
 - Continue the scheduled weekly audit from this verified baseline.
+
+## Weekly ARCS vault option concurrency refactor - 2026-09-27
+
+### What changed
+
+- Prevented older Character and Asset vault option requests from overwriting
+  newer results when users switch ImageShop destinations quickly or reopen a
+  save modal before an earlier request finishes.
+- Consolidated duplicated loading, error recovery, request ownership, and
+  unmount cleanup into a shared typed vault-option hook used by ImageShop,
+  Character Studio, Asset Studio, and Storyline Studio.
+- Removed unsafe non-null assertions from Character and Asset save matching and
+  from Asset vault thumbnail-focus parsing.
+- Added a regression that reproduces Character -> NPC -> Character request
+  reordering and proves that only the newest response is rendered.
+
+### Files touched
+
+- `src/shared/hooks/useVaultOptions.ts`
+- `src/portals/storyline/ImageshopImportPanel.tsx`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/StorylineStudio.tsx`
+- `src/portals/storyline/__tests__/ImageshopImportPanel.test.tsx`
+- `src/portals/CharacterStudio.tsx`
+- `src/portals/AssetsStudio.tsx`
+- `src/shared/api/arcsAssetVault.ts`
+- `logs/agent-change-log.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `useLatestOptions` assigns every request an increasing identity. Only the
+  current identity may publish options, clear options after an error, or end
+  the loading state; cancellation and unmount both invalidate older work.
+- The ImageShop wrapper cancels the inactive destination request whenever the
+  selected target changes. Character, Asset, and Storyline save modals reuse
+  the same latest-request-wins primitive for repeated refreshes.
+- The audit also covered executable `any` usage, optional-value boundaries,
+  hook dependencies, effect cleanup, Vite environment typing, public asset
+  routing, and large React portals. No additional confirmed defect or
+  evidence-backed memoization target remained.
+- The DOX closeout left `AGENTS.md` unchanged because the refactor changes no
+  durable contract, ownership boundary, permission, workflow, or child index.
+
+### Verification
+
+- The new async-ordering regression failed against the prior implementation by
+  rendering `Stale profile`, then passed after the shared hook refactor.
+- Focused ImageShop verification: 2 files / 33 tests passed.
+- Focused Storyline and ImageShop verification: 2 files / 5 tests passed.
+- Focused Asset vault verification: 1 file / 3 tests passed.
+- `npx tsc --noEmit -p tsconfig.app.json --pretty false` - PASS.
+- `npm run lint` - PASS, 0 errors and 0 ESLint warnings.
+- `npm run test` - PASS, 188 files / 1,648 tests.
+- `npm run build` - PASS, 2,693 modules transformed.
+- Browser smoke opened the local ARCS landing page and reached the protected
+  ImageShop route, where interactive verification stopped at the authentication
+  gate.
+
+### Outstanding issues
+
+- Live destination-switching QA requires an authenticated ARCS browser session.
+  The deterministic component regression covers the request-ordering behavior.
+
+### Risks or caveats
+
+- Browserslist reports that `caniuse-lite` is six months old. This is a
+  non-blocking maintenance notice and was not changed during the audit.
+- No deployment, production-data mutation, or live Supabase write was needed.
+
+### Operator follow-up
+
+- For a live confirmation, sign into the local ARCS app and switch Character ->
+  NPC -> Character while delaying the two Character album responses; the most
+  recent profile list must remain visible after the older response completes.
+
+### Next steps
+
+- Continue the scheduled weekly audit from this verified baseline.

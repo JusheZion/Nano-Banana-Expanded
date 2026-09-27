@@ -29,6 +29,7 @@ import { useStorylineStudioStore } from '@/stores/storylineStudioStore';
 import { getCharacterAlbums, type VaultCharacterItem } from '@/shared/api/arcsVault';
 import { getAssetAlbums, type VaultAssetItem } from '@/shared/api/arcsAssetVault';
 import { saveStorySequenceToAssetsVault } from '@/shared/api/arcsPersistence';
+import { useAssetVaultOptions } from '@/shared/hooks/useVaultOptions';
 import { pickGenerationSeed } from '@/shared/utils/generationSeed';
 import { firstStoryCoverImageUrl } from '@/shared/utils/storySequencePayload';
 import { getGenerations, saveGeneration, type StoredGeneration } from '@/shared/utils/generationOutputRouter';
@@ -125,8 +126,11 @@ export const StorylineStudio: React.FC = () => {
   const [saveVaultCollectionName, setSaveVaultCollectionName] = useState('');
   const [saveVaultAssetName, setSaveVaultAssetName] = useState('');
   const [saveVaultMode, setSaveVaultMode] = useState<'new' | 'library'>('new');
-  const [vaultCollectionOptions, setVaultCollectionOptions] = useState<string[]>([]);
-  const [vaultCollectionLoading, setVaultCollectionLoading] = useState(false);
+  const {
+    options: vaultCollectionOptions,
+    loading: vaultCollectionLoading,
+    refresh: loadVaultCollections,
+  } = useAssetVaultOptions();
   const [saveVaultPending, setSaveVaultPending] = useState(false);
   const [labSeedPrompt, setLabSeedPrompt] = useState<string | null>(null);
   const [returnNotice, setReturnNotice] = useState<string | null>(null);
@@ -185,14 +189,6 @@ export const StorylineStudio: React.FC = () => {
     const lower = q.toLowerCase();
     return vaultCollectionOptions.find((c) => c.toLowerCase() === lower) ?? null;
   }, [vaultCollectionOptions]);
-
-  const loadVaultCollections = useCallback(() => {
-    setVaultCollectionLoading(true);
-    getAssetAlbums()
-      .then((albums) => setVaultCollectionOptions(albums.map((a) => a.collectionName)))
-      .catch(() => setVaultCollectionOptions([]))
-      .finally(() => setVaultCollectionLoading(false));
-  }, []);
 
   const openSaveVaultModal = useCallback(() => {
     setSaveVaultCollectionName('');
