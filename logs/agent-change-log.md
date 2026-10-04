@@ -297,3 +297,52 @@
   - The DOX pass left AGENTS files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
   - Playwright diagnostic artifacts created by this audit were removed after browser QA.
   - No deployment, production-data mutation, live Supabase write, or credential access was performed.
+
+### 2026-10-04 00:14 EDT - Refactor: Centralize archive request ownership
+
+- Job ID: 20261004-000158-arcs-archive-async
+- Workflow: Heavy
+- Workflow version: lean-routing-2026-08-03
+- Model: GPT-5
+- Started: 2026-10-04 00:01 EDT
+- Finished: 2026-10-04 00:14 EDT
+- Elapsed: 12m
+- Feature or system area: Vault/archive async loading and persisted thumbnail metadata
+- Initial outcome: partial - the first regression reproduced stale Character Vault results, and the broader audit found the same ownership gap plus duplicated thumbnail trust in adjacent archive paths.
+- Outcome: success
+- Rerouted: none
+- Failed fix attempts: 0
+- Bugs:
+  - Pre-existing: 4
+  - Introduced and caught: 1
+  - Escaped regression: 0
+- Release result: success
+- Related job ID: 20260927-000936-arcs-weekly-vault-options
+- Files changed:
+  - Archive/vault components and hooks, archive metadata utilities and APIs, guarded store/navigation/export code, focused regressions, and `walkthrough.md`.
+- Steps taken:
+  1. Re-established passing strict TypeScript, lint, 1,648-test, and production-build baselines and audited TypeScript, React lifecycle, Vite environment, and public asset surfaces.
+  2. Reproduced an older Character Vault refresh replacing the newest album result during overlapping modal and manual refreshes.
+  3. Deepened the existing vault-option lifecycle into a reusable typed async-value module and migrated Character Vault, Asset Vault, and both archive galleries.
+  4. Added visible accessible errors that preserve prior valid archive content, then centralized and validated archive-thumbnail metadata for every API reader.
+  5. Removed redundant production non-null assertions, ran focused and complete gates, attempted protected-route browser QA, completed the DOX pass, and preserved unrelated worktree changes.
+- Tests run:
+  - Baseline/final `npx tsc --noEmit -p tsconfig.app.json --pretty false` - passed.
+  - Baseline/final `npm run lint` - passed, 0 errors / 0 ESLint warnings.
+  - Baseline `npm run test -- --run` - passed, 188 files / 1,648 tests.
+  - Baseline `npm run build` - passed, 2,693 modules.
+  - Character Vault stale-refresh regression before fix - failed as expected by rendering `Stale` after `Current`.
+  - First post-fix focused run - failed because the test attempted a manual refresh button that the fix correctly disabled while loading; the test was corrected to use two valid modal refresh callbacks.
+  - Focused post-fix verification - passed, 4 files / 10 tests.
+  - Expanded focused verification - passed, 5 discovered files / 53 tests.
+  - Final `npm run test -- --run` - passed, 189 files / 1,651 tests.
+  - Final `npm run build` - passed, 2,695 modules.
+  - Browser smoke - ARCS loaded and Reference Vault navigation passed; interactive vault QA stopped at `Sign in to continue` because no authenticated session was available.
+- Notes:
+  - The introduced-and-caught issue was the regression's obsolete attempt to click a newly disabled loading control; no production fix failed.
+  - The four pre-existing defects are stale Character Vault refresh publication, the mirrored Asset Vault race, unowned Character Archive refresh callbacks, and unvalidated archive-thumbnail metadata shared by three readers.
+  - A focused command named two nonexistent optional test paths while also running five maintained files; path discovery confirmed the five-file / 53-test result before the full suite.
+  - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remained user-owned and uncommitted.
+  - The DOX pass left AGENTS files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
+  - Playwright diagnostic artifacts were removed after browser QA.
+  - No deployment, production-data mutation, live Supabase write, dependency update, or credential access was performed.

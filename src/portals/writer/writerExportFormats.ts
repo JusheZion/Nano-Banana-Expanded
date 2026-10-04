@@ -305,7 +305,7 @@ export function formatBeatsBundleAsText(
     const b = asBeatsJsonLike(p.beats_json);
     const hook = safeText(b?.one_line_hook);
     if (hook) lines.push(hook);
-    const panels = Array.isArray(b?.panels) ? b!.panels! : [];
+    const panels = b && Array.isArray(b.panels) ? b.panels : [];
     if (!panels.length) {
       lines.push('(no beats)');
     } else {
@@ -338,7 +338,7 @@ export function formatBeatsBundleAsMarkdown(
     const b = asBeatsJsonLike(p.beats_json);
     const hook = safeText(b?.one_line_hook);
     if (hook) lines.push(hook, '');
-    const panels = Array.isArray(b?.panels) ? b!.panels! : [];
+    const panels = b && Array.isArray(b.panels) ? b.panels : [];
     if (!panels.length) {
       lines.push('_No beats_', '');
     } else {

@@ -204,7 +204,8 @@ export const useStorylineStudioStore = create<StorylineStudioState>()(
           const list = [...s.beats];
           if (fromIndex < 0 || fromIndex >= list.length) return s;
           const [item] = list.splice(fromIndex, 1);
-          list.splice(Math.max(0, Math.min(list.length, toIndex)), 0, item!);
+          if (!item) return s;
+          list.splice(Math.max(0, Math.min(list.length, toIndex)), 0, item);
           return { beats: list };
         }),
 

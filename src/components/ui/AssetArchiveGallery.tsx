@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import { getAssetsGroupedByCollection } from '@/shared/api/arcsArchive';
 import type { AssetArchiveItem } from '@/shared/api/arcsArchive';
 import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
+import { useLatestAsyncValue } from '@/shared/hooks/useLatestAsyncValue';
 
 /** Amethyst accent for asset archive (match Assets Studio). */
 const AMETHYST = '#8B5CF6';
@@ -10,30 +11,11 @@ const AMETHYST_LIGHT = '#A78BFA';
 
 export const AssetArchiveGallery: React.FC = () => {
     const [hoveredKey, setHoveredKey] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [grouped, setGrouped] = useState<Record<string, AssetArchiveItem[]>>({});
+    const { value: grouped, loading, error } = useLatestAsyncValue<Record<string, AssetArchiveItem[]>>(
+        getAssetsGroupedByCollection,
+        {},
+    );
     useTheme();
-
-    useEffect(() => {
-        // Previously an unguarded .then/.finally: a rejected fetch became an unhandled promise
-        // rejection and an unmount mid-flight set state on a dead component.
-        let cancelled = false;
-        setLoading(true);
-        getAssetsGroupedByCollection()
-            .then((next) => {
-                if (!cancelled) setGrouped(next);
-            })
-            .catch((err: unknown) => {
-                console.error('[AssetArchiveGallery] failed to load asset archive', err);
-                if (!cancelled) setGrouped({});
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, []);
 
     const collectionNames = Object.keys(grouped);
     const totalItems = collectionNames.reduce((acc, k) => acc + grouped[k].length, 0);
@@ -52,6 +34,8 @@ export const AssetArchiveGallery: React.FC = () => {
                     Settings &amp; locations. <span className="text-white/90 font-medium">Grouped by collection.</span>
                 </p>
             </div>
+
+            {error && <p role="alert" className="mb-6 text-sm text-rose-200">Archive load failed: {error}.</p>}
 
             {loading ? (
                 <p className="text-white/50 text-center py-12">Loading archive…</p>

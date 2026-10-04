@@ -554,7 +554,8 @@ export const StorylineStudio: React.FC = () => {
           next = Math.min(st.beats.length - 1, idx < 0 ? 0 : idx + 1);
         if (e.key === 'Home') next = 0;
         if (e.key === 'End') next = st.beats.length - 1;
-        st.setSelectedBeatId(st.beats[next]!.id);
+        const nextBeat = st.beats[next];
+        if (nextBeat) st.setSelectedBeatId(nextBeat.id);
       }
     };
     window.addEventListener('keydown', onKey);

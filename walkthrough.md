@@ -17311,3 +17311,99 @@ Modified:
 ### Next steps
 
 - Continue the scheduled weekly audit from this verified baseline.
+
+## Weekly ARCS async archive ownership and metadata hardening - 2026-10-04
+
+### What changed
+
+- Prevented older Character Vault and Asset Vault refreshes from replacing newer
+  album results when a modal mutation and a manual refresh overlap.
+- Replaced duplicated archive loading effects with a shared typed async-value
+  hook that owns request identity, cancellation, loading, errors, unmount
+  invalidation, and preservation of the last valid result.
+- Added accessible error notices to Character Vault, Asset Vault, Character
+  Archive, and Asset Archive instead of silently presenting failed loads as
+  empty data.
+- Centralized persisted archive-thumbnail parsing across all three archive APIs.
+  Non-object, non-finite, out-of-range, and non-positive framing values can no
+  longer reach CSS object positioning or transforms unchanged.
+- Removed redundant production non-null assertions from comic cloning,
+  storyline beat ordering/navigation, Writer page navigation/export, and latest
+  outline deletion.
+
+### Files touched
+
+- `src/shared/hooks/useLatestAsyncValue.ts`
+- `src/shared/hooks/useVaultOptions.ts`
+- `src/components/ui/CharacterVault.tsx`
+- `src/components/ui/AssetVault.tsx`
+- `src/components/ui/CinematicGallery.tsx`
+- `src/components/ui/AssetArchiveGallery.tsx`
+- `src/components/ui/__tests__/CharacterVault.guided.test.tsx`
+- `src/shared/utils/archiveThumbnail.ts`
+- `src/shared/utils/__tests__/archiveThumbnail.test.ts`
+- `src/shared/api/arcsArchive.ts`
+- `src/shared/api/arcsAssetVault.ts`
+- `src/shared/api/arcsVault.ts`
+- `src/shared/api/arcsWriterRoom.ts`
+- `src/stores/comicStore.ts`
+- `src/stores/storylineStudioStore.ts`
+- `src/portals/storyline/StorylineStudio.tsx`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerExportFormats.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `useLatestAsyncValue` is the single async ownership seam. Only the newest
+  request may publish data, error, or loading state; cleanup invalidates older
+  work, and refresh failures preserve the last valid value.
+- Existing ImageShop and Studio option callers now use the same deeper module
+  through `useVaultOptions`, retaining the prior latest-request behavior while
+  removing its duplicated lifecycle implementation.
+- `parseArchiveThumbnail` accepts unknown persisted metadata, returns a strict
+  `ThumbnailFocus` or `null`, clamps focus to 0-100, defaults partial axes, and
+  rejects invalid scale values.
+- The audit found no executable `any`, hook-dependency warning, new Vite
+  environment typing issue, or unmapped public asset consumer. No speculative
+  `React.memo` or portal split was added without render evidence.
+- The DOX pass left `AGENTS.md` unchanged because no durable product contract,
+  ownership boundary, permission, workflow, or child index changed.
+
+### Verification
+
+- The Character Vault concurrency regression rendered the stale older album
+  against the prior implementation and passed after request ownership moved to
+  the shared hook.
+- Focused verification: 4 files / 10 tests passed for vault concurrency,
+  ImageShop compatibility, archive metadata, and Character vault behavior.
+- Expanded focused verification: 5 discovered files / 53 tests passed.
+- `npx tsc --noEmit -p tsconfig.app.json --pretty false` - PASS.
+- `npm run lint` - PASS, 0 errors and 0 ESLint warnings.
+- `npm run test -- --run` - PASS, 189 files / 1,651 tests.
+- `npm run build` - PASS, 2,695 modules transformed.
+- Browser smoke loaded ARCS and navigated to Reference Vault; the protected
+  workspace stopped at the expected authentication gate.
+
+### Outstanding issues
+
+- Live authenticated Character/Asset Vault interaction could not be exercised
+  in this automation session. The deterministic concurrency regression covers
+  the changed request-ordering behavior.
+
+### Risks or caveats
+
+- Browserslist reports that `caniuse-lite` is seven months old. This remains a
+  non-blocking maintenance notice and was not changed during the audit.
+- No deployment, production-data mutation, live Supabase write, dependency
+  update, or credential access was performed.
+
+### Operator follow-up
+
+- For live confirmation, sign into ARCS, open Reference Vault, and overlap a
+  modal save refresh with a manual refresh; the newest album result must remain
+  visible and a failed refresh must retain prior content with an alert.
+
+### Next steps
+
+- Continue the scheduled weekly audit from this verified baseline.

@@ -2782,12 +2782,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   const onPrevPage = useCallback(() => {
     if (!hasPrevPage) return;
-    setSelectedPageId(sortedPages[pageIndex - 1]!.id);
+    const previousPage = sortedPages[pageIndex - 1];
+    if (previousPage) setSelectedPageId(previousPage.id);
   }, [hasPrevPage, pageIndex, sortedPages]);
 
   const onNextPage = useCallback(() => {
     if (!hasNextPage) return;
-    setSelectedPageId(sortedPages[pageIndex + 1]!.id);
+    const nextPage = sortedPages[pageIndex + 1];
+    if (nextPage) setSelectedPageId(nextPage.id);
   }, [hasNextPage, pageIndex, sortedPages]);
 
   const runPacingFromRibbon = useCallback(async () => {

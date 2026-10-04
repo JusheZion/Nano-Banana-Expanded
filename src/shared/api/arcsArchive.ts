@@ -4,6 +4,7 @@
  */
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 import { getGenerations } from '@/shared/utils/generationOutputRouter';
+import { parseArchiveThumbnail } from '@/shared/utils/archiveThumbnail';
 
 export type CharacterArchiveItem = {
   id: string;
@@ -46,17 +47,9 @@ export async function getCharactersGroupedByProfile(): Promise<
       const grouped: Record<string, CharacterArchiveItem[]> = {};
       for (const raw of rows) {
         const row = raw as Record<string, unknown>;
-        const mt = row.metadata_tags as Record<string, unknown> | null | undefined;
-        const at = mt?.archive_thumbnail as
-          | { x?: number; y?: number; scale?: number }
-          | undefined;
+        const archiveThumbnail = parseArchiveThumbnail(row.metadata_tags);
         const key = (row.profile_name as string | null) ?? 'Unnamed';
         if (!grouped[key]) grouped[key] = [];
-        const hasThumb =
-          at &&
-          (typeof at.x === 'number' ||
-            typeof at.y === 'number' ||
-            typeof at.scale === 'number');
         const item: CharacterArchiveItem = {
           id: row.id as string,
           image_url: row.image_url as string,
@@ -64,10 +57,10 @@ export async function getCharactersGroupedByProfile(): Promise<
           cast_name: row.cast_name as string | undefined,
           profile_name: row.profile_name as string | undefined,
           seed: row.seed as number | undefined,
-          ...(hasThumb && {
-            thumbnail_focus_x: typeof at!.x === 'number' ? at!.x! : 50,
-            thumbnail_focus_y: typeof at!.y === 'number' ? at!.y! : 50,
-            thumbnail_scale: typeof at!.scale === 'number' ? at!.scale! : 1,
+          ...(archiveThumbnail && {
+            thumbnail_focus_x: archiveThumbnail.x,
+            thumbnail_focus_y: archiveThumbnail.y,
+            thumbnail_scale: archiveThumbnail.scale,
           }),
         };
         grouped[key].push(item);

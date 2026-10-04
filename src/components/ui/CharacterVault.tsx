@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, RefreshCw, Search } from 'lucide-react';
-import { getCharacterAlbums } from '@/shared/api/arcsVault';
 import type { VaultCharacterAlbum } from '@/shared/api/arcsVault';
+import { useCharacterVaultAlbums } from '@/shared/hooks/useVaultOptions';
 import { ProfileVaultModal } from '@/components/ui/ProfileVaultModal';
 import { VaultImageWithFallback } from '@/components/ui/VaultImageWithFallback';
 import {
@@ -19,8 +19,7 @@ function getCoverItem(album: VaultCharacterAlbum) {
 }
 
 export const CharacterVault: React.FC = () => {
-  const [loading, setLoading] = useState(true);
-  const [albums, setAlbums] = useState<VaultCharacterAlbum[]>([]);
+  const { value: albums, loading, error, refresh } = useCharacterVaultAlbums(true);
   const [openProfile, setOpenProfile] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [previewMode, setPreviewMode] = useState<VaultPreviewMode>('large');
@@ -31,18 +30,6 @@ export const CharacterVault: React.FC = () => {
     if (!openProfile) return null;
     return albums.find((a) => a.profileName === openProfile) ?? null;
   }, [albums, openProfile]);
-
-  const refresh = async () => {
-    const next = await getCharacterAlbums();
-    setAlbums(next);
-  };
-
-  useEffect(() => {
-    setLoading(true);
-    refresh()
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
 
   useEffect(() => {
     if (openProfile && !albums.some((a) => a.profileName === openProfile)) {
@@ -136,6 +123,11 @@ export const CharacterVault: React.FC = () => {
           </div>
           <VaultViewModeToggle value={previewMode} onChange={setPreviewMode} />
         </div>
+        {error && (
+          <p role="alert" className="mt-3 text-sm text-rose-200">
+            Vault refresh failed: {error}. Previous results are still shown.
+          </p>
+        )}
       </div>
 
       {loading ? (

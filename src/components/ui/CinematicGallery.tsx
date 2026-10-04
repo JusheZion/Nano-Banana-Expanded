@@ -1,45 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import { getCharactersGroupedByProfile } from '@/shared/api/arcsArchive';
 import type { CharacterArchiveItem } from '@/shared/api/arcsArchive';
 import { ArchiveThumbnailFocusModal } from '@/components/ui/ArchiveThumbnailFocusModal';
 import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
+import { useLatestAsyncValue } from '@/shared/hooks/useLatestAsyncValue';
 
 export const CinematicGallery: React.FC = () => {
     const [hoveredKey, setHoveredKey] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [grouped, setGrouped] = useState<Record<string, CharacterArchiveItem[]>>({});
+    const { value: grouped, loading, error, refresh } = useLatestAsyncValue<Record<string, CharacterArchiveItem[]>>(
+        getCharactersGroupedByProfile,
+        {},
+    );
     const [focusEditItem, setFocusEditItem] = useState<CharacterArchiveItem | null>(null);
     useTheme();
-
-    const refreshArchive = useCallback(() => {
-        void getCharactersGroupedByProfile()
-            .then(setGrouped)
-            .catch((err: unknown) => {
-                console.error('[CinematicGallery] failed to refresh character archive', err);
-            });
-    }, []);
-
-    useEffect(() => {
-        // Previously an unguarded .then/.finally: a rejected fetch became an unhandled promise
-        // rejection and an unmount mid-flight set state on a dead component.
-        let cancelled = false;
-        setLoading(true);
-        getCharactersGroupedByProfile()
-            .then((next) => {
-                if (!cancelled) setGrouped(next);
-            })
-            .catch((err: unknown) => {
-                console.error('[CinematicGallery] failed to load character archive', err);
-                if (!cancelled) setGrouped({});
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, []);
 
     const profileNames = Object.keys(grouped);
     const totalItems = profileNames.reduce((acc, k) => acc + grouped[k].length, 0);
@@ -51,7 +25,7 @@ export const CinematicGallery: React.FC = () => {
                     context="character"
                     item={focusEditItem}
                     onClose={() => setFocusEditItem(null)}
-                    onSaved={refreshArchive}
+                    onSaved={() => void refresh()}
                 />
             )}
             {/* Header */}
@@ -66,6 +40,8 @@ export const CinematicGallery: React.FC = () => {
                     High-fidelity visual library. <span className="text-white/90 font-medium">Constrained for clarity.</span>
                 </p>
             </div>
+
+            {error && <p role="alert" className="mb-6 text-sm text-rose-200">Archive refresh failed: {error}. Previous results are still shown.</p>}
 
             {loading ? (
                 <p className="text-white/50 text-center py-12">Loading archive…</p>

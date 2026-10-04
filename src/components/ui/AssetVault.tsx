@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, RefreshCw, Search } from 'lucide-react';
-import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
 import type { VaultAssetAlbum } from '@/shared/api/arcsAssetVault';
+import { useAssetVaultAlbums } from '@/shared/hooks/useVaultOptions';
 import { CollectionVaultModal } from '@/components/ui/CollectionVaultModal';
 import { VaultImageWithFallback } from '@/components/ui/VaultImageWithFallback';
 import {
@@ -24,8 +24,7 @@ function coverItem(album: VaultAssetAlbum) {
 }
 
 export const AssetVault: React.FC = () => {
-  const [loading, setLoading] = useState(true);
-  const [albums, setAlbums] = useState<VaultAssetAlbum[]>([]);
+  const { value: albums, loading, error, refresh } = useAssetVaultAlbums(true);
   const [openCollection, setOpenCollection] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [previewMode, setPreviewMode] = useState<VaultPreviewMode>('large');
@@ -36,18 +35,6 @@ export const AssetVault: React.FC = () => {
     if (!openCollection) return null;
     return albums.find((a) => a.collectionName === openCollection) ?? null;
   }, [albums, openCollection]);
-
-  const refresh = async () => {
-    const next = await getAssetAlbums();
-    setAlbums(next);
-  };
-
-  useEffect(() => {
-    setLoading(true);
-    refresh()
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
 
   useEffect(() => {
     if (openCollection && !albums.some((a) => a.collectionName === openCollection)) {
@@ -148,6 +135,11 @@ export const AssetVault: React.FC = () => {
           </div>
           <VaultViewModeToggle value={previewMode} onChange={setPreviewMode} />
         </div>
+        {error && (
+          <p role="alert" className="mt-3 text-sm text-rose-200">
+            Vault refresh failed: {error}. Previous results are still shown.
+          </p>
+        )}
       </div>
 
       {loading ? (

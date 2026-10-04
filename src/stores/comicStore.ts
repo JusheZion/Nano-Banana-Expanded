@@ -1231,11 +1231,9 @@ export const useComicStore = create<ComicState>()(
                     const page = state.pages.find(p => p.id === pageId);
                     if (!page) return state;
 
-                    let clonedId: string | undefined;
-
                     const panel = page.panels.find(p => p.id === elementId);
                     if (panel) {
-                        clonedId = crypto.randomUUID();
+                        const clonedId = crypto.randomUUID();
                         const newPanel: Panel = {
                             ...panel,
                             id: clonedId,
@@ -1246,7 +1244,7 @@ export const useComicStore = create<ComicState>()(
                             pages: state.pages.map(p => p.id === pageId ? {
                                 ...p,
                                 panels: [...p.panels, newPanel],
-                                layerOrder: [...p.layerOrder, clonedId!]
+                                layerOrder: [...p.layerOrder, clonedId]
                             } : p),
                             selectedElementIds: [clonedId]
                         };
@@ -1254,7 +1252,7 @@ export const useComicStore = create<ComicState>()(
 
                     const balloon = page.balloons.find(b => b.id === elementId);
                     if (balloon) {
-                        clonedId = crypto.randomUUID();
+                        const clonedId = crypto.randomUUID();
                         const newBalloon: BalloonInstance = {
                             ...balloon,
                             id: clonedId,
@@ -1265,7 +1263,7 @@ export const useComicStore = create<ComicState>()(
                             pages: state.pages.map(p => p.id === pageId ? {
                                 ...p,
                                 balloons: [...p.balloons, newBalloon],
-                                layerOrder: [...p.layerOrder, clonedId!]
+                                layerOrder: [...p.layerOrder, clonedId]
                             } : p),
                             selectedElementIds: [clonedId]
                         };

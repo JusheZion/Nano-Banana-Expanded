@@ -9,6 +9,7 @@ import {
   deleteAssetCollectionLocal,
 } from '@/shared/utils/generationOutputRouter';
 import type { ThumbnailFocus } from '@/shared/utils/generationOutputRouter';
+import { parseArchiveThumbnail } from '@/shared/utils/archiveThumbnail';
 
 export type VaultAssetItem = {
   id: string;
@@ -65,15 +66,7 @@ export async function getAssetAlbums(): Promise<VaultAssetAlbum[]> {
       if (!error && data != null) {
         const list = (data ?? []).map((raw) => {
           const row = raw as Record<string, unknown>;
-          const mt = row.metadata_tags as Record<string, unknown> | null | undefined;
-          const at = mt?.archive_thumbnail as
-            | { x?: number; y?: number; scale?: number }
-            | undefined;
-          const hasThumb =
-            at != null &&
-            (typeof at.x === 'number' ||
-              typeof at.y === 'number' ||
-              typeof at.scale === 'number');
+          const archiveThumbnail = parseArchiveThumbnail(row.metadata_tags);
           const base: VaultAssetItem = {
             id: row.id as string,
             image_url: row.image_url as string,
@@ -83,12 +76,12 @@ export async function getAssetAlbums(): Promise<VaultAssetAlbum[]> {
             seed: (row.seed as number | null) ?? null,
             created_at: (row.created_at as string | null) ?? null,
           };
-          if (!hasThumb || at == null) return base;
+          if (!archiveThumbnail) return base;
           return {
             ...base,
-            thumbnail_focus_x: typeof at.x === 'number' ? at.x : 50,
-            thumbnail_focus_y: typeof at.y === 'number' ? at.y : 50,
-            thumbnail_scale: typeof at.scale === 'number' ? at.scale : 1,
+            thumbnail_focus_x: archiveThumbnail.x,
+            thumbnail_focus_y: archiveThumbnail.y,
+            thumbnail_scale: archiveThumbnail.scale,
           };
         }) as VaultAssetItem[];
         return groupAssetAlbums(list);

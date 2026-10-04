@@ -759,8 +759,9 @@ export async function deleteLatestWriterOutline(issueId: string): Promise<{ ok: 
     return { ok: false, error: listError.message };
   }
   const rows = (data ?? []) as { id: string }[];
-  if (rows.length === 0) return { ok: true };
-  const { error } = await supabase.from('writer_issue_outlines').delete().eq('id', rows[0]!.id);
+  const latest = rows[0];
+  if (!latest) return { ok: true };
+  const { error } = await supabase.from('writer_issue_outlines').delete().eq('id', latest.id);
   if (error) {
     console.warn('[arcsWriterRoom] deleteLatestWriterOutline', error.message);
     return { ok: false, error: error.message };
