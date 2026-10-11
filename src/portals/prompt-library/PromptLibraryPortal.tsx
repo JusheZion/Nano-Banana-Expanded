@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent, KeyboardEvent, MouseEvent } from 'react';
 import {
   Archive,
@@ -27,7 +27,6 @@ import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/shared/context/AuthContext';
 import { supabase } from '@/shared/lib/supabase';
 import { usePromptLibraryBridge, handoffToPromptDraft } from '@/stores/promptLibraryBridge';
-import { demoPrompts } from './data/demoData';
 import {
   categoryMeta,
   combinePrompts,
@@ -40,11 +39,11 @@ import {
 } from './lib/promptUtils';
 import {
   deletePrompt as deleteDatabasePrompt,
-  fetchPrompts,
   savePrompt as saveDatabasePrompt,
   toggleFavorite as toggleDatabaseFavorite,
 } from './lib/promptRepository';
 import type { LibraryFilters, PromptDraft, PromptRecord } from './lib/types';
+import { usePromptLibraryState } from './usePromptLibraryState';
 import './promptLibrary.css';
 
 const defaultFilters: LibraryFilters = {
@@ -92,16 +91,22 @@ export function PromptLibraryPortal() {
   const { user } = useAuth();
   const consumeInboundDraft = usePromptLibraryBridge((s) => s.consumeInboundDraft);
   const requestUsePrompt = usePromptLibraryBridge((s) => s.requestUsePrompt);
-  const [prompts, setPrompts] = useState<PromptRecord[]>(demoPrompts);
-  const [selectedId, setSelectedId] = useState(demoPrompts[1]?.id ?? demoPrompts[0]?.id ?? '');
+  const {
+    prompts,
+    setPrompts,
+    selectedId,
+    setSelectedId,
+    status,
+    setStatus,
+    isBusy,
+    setIsBusy,
+    isDatabaseReady,
+    refresh: loadDatabasePrompts,
+  } = usePromptLibraryState(user);
   const [filters, setFilters] = useState<LibraryFilters>(defaultFilters);
   const [editorDraft, setEditorDraft] = useState<PromptDraft | null>(null);
   const [combineSelectionIds, setCombineSelectionIds] = useState<string[]>([]);
   const [lastCombineIndex, setLastCombineIndex] = useState<number | null>(null);
-  const [status, setStatus] = useState('Prompt Library ready. Sign in to persist ARCS prompt intelligence.');
-  const [isBusy, setIsBusy] = useState(false);
-
-  const isDatabaseReady = Boolean(supabase && user);
   const visiblePrompts = useMemo(() => filterPrompts(prompts, filters), [prompts, filters]);
   const selectedPrompt = prompts.find((prompt) => prompt.id === selectedId) ?? visiblePrompts[0] ?? prompts[0] ?? null;
   const combineSelection = useMemo(
@@ -123,31 +128,7 @@ export function PromptLibraryPortal() {
     const draft = handoffToPromptDraft(handoff);
     setEditorDraft(draft);
     setStatus(`Incoming prompt from ${handoff.sourceLabel}. Review and save it to the library.`);
-  }, [consumeInboundDraft]);
-
-  const loadDatabasePrompts = useCallback(async () => {
-    if (!supabase || !user) return;
-    setIsBusy(true);
-    try {
-      const databasePrompts = await fetchPrompts(supabase, user);
-      setPrompts(databasePrompts.length ? databasePrompts : []);
-      setSelectedId(databasePrompts[0]?.id ?? '');
-      setStatus(databasePrompts.length ? 'Database library synced.' : 'Database connected. Create your first prompt.');
-    } catch (error) {
-      setStatus(getErrorMessage(error, 'Database sync failed.'));
-    } finally {
-      setIsBusy(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (!supabase || !user) {
-      setPrompts(demoPrompts);
-      setStatus('Demo library loaded. Sign in to persist Prompt Library records.');
-      return;
-    }
-    void loadDatabasePrompts();
-  }, [loadDatabasePrompts, user]);
+  }, [consumeInboundDraft, setStatus]);
 
   async function handleSave(draft: PromptDraft) {
     const existing = draft.id ? prompts.find((prompt) => prompt.id === draft.id) : undefined;

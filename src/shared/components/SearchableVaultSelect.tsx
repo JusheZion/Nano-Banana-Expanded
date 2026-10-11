@@ -106,9 +106,10 @@ export function SearchableVaultSelect({
       return;
     }
     if (e.key === 'Enter') {
-      if (open && activeIndex >= 0 && activeIndex < filtered.length) {
+      const activeOption = filtered[activeIndex];
+      if (open && activeOption) {
         e.preventDefault();
-        pickOption(filtered[activeIndex]!);
+        pickOption(activeOption);
         return;
       }
       onEnterPress?.(e);

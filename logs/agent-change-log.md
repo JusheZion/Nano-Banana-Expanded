@@ -346,3 +346,46 @@
   - The DOX pass left AGENTS files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
   - Playwright diagnostic artifacts were removed after browser QA.
   - No deployment, production-data mutation, live Supabase write, dependency update, or credential access was performed.
+
+### 2026-10-11 00:09 EDT - Refactor: Own Prompt Library account refreshes
+
+- Job ID: 20261011-000125-arcs-weekly-prompt-library
+- Workflow: Heavy
+- Workflow version: lean-routing-2026-08-03
+- Model: GPT-5
+- Started: 2026-10-11 00:01 EDT
+- Finished: 2026-10-11 00:09 EDT
+- Elapsed: 8m
+- Feature or system area: Prompt Library authentication lifecycle and Codex TypeScript safety
+- Initial outcome: partial - the adversarial regression reproduced a prior-account response publishing after sign-out.
+- Outcome: success
+- Rerouted: none
+- Failed fix attempts: 0
+- Bugs:
+  - Pre-existing: 2
+  - Introduced and caught: 1
+  - Escaped regression: 0
+- Release result: success
+- Related job ID: 20261004-000158-arcs-archive-async
+- Files changed:
+  - Prompt Library state hook and portal, auth-lifecycle regressions, ARCS startup, Codex binding/properties narrowing, vault combobox narrowing, `walkthrough.md`, and this log.
+- Steps taken:
+  1. Re-established passing TypeScript and lint baselines and audited TypeScript assertions, React effects, async ownership, Vite environment access, and public asset paths.
+  2. Reproduced a late account-A Prompt Library refresh replacing demo data after sign-out, then covered the account-A/account-B ordering case.
+  3. Extracted Prompt Library persistence state into `usePromptLibraryState`, where request generations and auth cleanup own every publishable result.
+  4. Removed avoidable production assertions from startup, Codex canon/property paths, and the searchable vault combobox.
+  5. Ran focused and complete gates, completed the DOX pass, and preserved unrelated worktree changes.
+- Tests run:
+  - Pre-fix Prompt Library auth regression - failed as expected by rendering `Private account prompt` after sign-out.
+  - Focused Prompt Library verification - passed, 2 files / 8 tests.
+  - Expanded focused verification - passed, 3 discovered files / 39 tests.
+  - `npx tsc -b --pretty false` - passed.
+  - `npm run lint` - passed, 0 errors / 0 warnings.
+  - `npm run test -- --run` - passed, 190 files / 1,653 tests.
+  - `npm run build` - passed, 2,696 modules.
+- Notes:
+  - The second pre-existing defect was unsafe startup failure if the Vite mount element is absent; it now fails with an explicit diagnostic instead of a null dereference.
+  - The introduced-and-caught issue was one exhaustive-dependencies warning after moving `setStatus` behind the extracted hook; the dependency was added before the final gates.
+  - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remain user-owned and uncommitted.
+  - The DOX pass left AGENTS files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
+  - No deployment, production-data mutation, live Supabase write, dependency update, or credential access was performed.

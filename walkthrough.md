@@ -17407,3 +17407,74 @@ Modified:
 ### Next steps
 
 - Continue the scheduled weekly audit from this verified baseline.
+
+## Weekly ARCS account-scoped async and TypeScript safety hardening - 2026-10-11
+
+### What changed
+
+- Prevented an older Prompt Library Supabase refresh from publishing a previous
+  account's prompts after sign-out or after a different account becomes active.
+- Extracted Prompt Library's database records, selection reset, status, loading,
+  and latest-request ownership from the portal into a dedicated typed hook.
+- Added adversarial regressions for sign-out during an unresolved request and
+  for account B winning when account A resolves last.
+- Replaced avoidable production non-null assertions in ARCS startup, Codex
+  canon bindings, Sigil/effect properties, and the searchable vault combobox
+  with explicit guards or stable narrowed values.
+
+### Files touched
+
+- `src/portals/prompt-library/usePromptLibraryState.ts`
+- `src/portals/prompt-library/PromptLibraryPortal.tsx`
+- `src/portals/prompt-library/PromptLibraryPortal.authLifecycle.test.tsx`
+- `src/main.tsx`
+- `src/modes/codex/components/PropertiesPanel.tsx`
+- `src/modes/codex/vault/vaultBinding.ts`
+- `src/shared/components/SearchableVaultSelect.tsx`
+- `walkthrough.md`
+- `logs/agent-change-log.md`
+
+### Implementation notes
+
+- `usePromptLibraryState` is the account-scoped persistence seam. Every refresh
+  receives a generation number; only the current generation may publish data,
+  status, selection, errors, or loading state. Auth changes and unmount cleanup
+  invalidate outstanding work.
+- The hook resets demo records and selection together on sign-out, preserving
+  the existing unsigned experience without allowing a late private response to
+  replace it.
+- The audited Vite environment declarations and public-asset routing remain
+  typed and base-aware. No executable production `any` usage was found.
+- The DOX pass left `AGENTS.md` unchanged because this work did not alter a
+  durable product contract, ownership boundary, workflow, permission, or child
+  index.
+
+### Verification
+
+- The sign-out regression failed before the fix by rendering the private
+  database prompt after the demo library had been restored.
+- Focused Prompt Library verification: 2 files / 8 tests passed.
+- Expanded focused verification: 3 discovered files / 39 tests passed.
+- `npx tsc -b --pretty false` - PASS.
+- `npm run lint` - PASS, 0 errors and 0 warnings.
+- `npm run test -- --run` - PASS, 190 files / 1,653 tests.
+- `npm run build` - PASS, 2,696 modules transformed.
+
+### Outstanding issues
+
+- None in the changed surfaces.
+
+### Risks or caveats
+
+- Browserslist reports that `caniuse-lite` is seven months old. This is a
+  non-blocking maintenance notice and was not changed during the audit.
+- No deployment, production-data mutation, live Supabase write, dependency
+  update, or credential access was performed.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- Continue the scheduled weekly audit from this verified baseline.

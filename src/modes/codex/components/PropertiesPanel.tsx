@@ -419,8 +419,9 @@ function ImageCanonSection({ object }: { object: CodexImageObject }) {
 
   if (status !== 'ready') return null;
 
-  const entry = object.binding
-    ? entries.find((e) => e.sourcePath === object.binding!.notePath)
+  const binding = object.binding;
+  const entry = binding
+    ? entries.find((e) => e.sourcePath === binding.notePath)
     : undefined;
   const pictures = entry ? boundableImages(entry) : [];
 
@@ -447,11 +448,11 @@ function ImageCanonSection({ object }: { object: CodexImageObject }) {
         </p>
       )}
 
-      {object.binding && (
+      {binding && (
         <>
           <Row label="Note">
-            <span className="block truncate text-[11px] text-white/70" title={object.binding.notePath}>
-              {object.binding.notePath.split('/').pop()}
+            <span className="block truncate text-[11px] text-white/70" title={binding.notePath}>
+              {binding.notePath.split('/').pop()}
             </span>
           </Row>
 
@@ -463,13 +464,13 @@ function ImageCanonSection({ object }: { object: CodexImageObject }) {
             <>
               <Row label="Picture">
                 <select
-                  value={object.binding.field}
+                  value={binding.field}
                   onChange={(e) => rebind(e.target.value)}
                   className="w-full rounded border border-white/15 bg-black/30 px-2 py-1 text-xs text-white focus:border-white/35 focus:outline-none"
                 >
-                  {!pictures.some((p) => p.reference === object.binding!.field) && (
-                    <option value={object.binding.field}>
-                      {object.binding.field} (missing)
+                  {!pictures.some((p) => p.reference === binding.field) && (
+                    <option value={binding.field}>
+                      {binding.field} (missing)
                     </option>
                   )}
                   {pictures.map((picture) => (
@@ -482,14 +483,14 @@ function ImageCanonSection({ object }: { object: CodexImageObject }) {
 
               <Row label="Update">
                 <select
-                  value={object.binding.mode}
+                  value={binding.mode}
                   onChange={(e) =>
                     applyPatches([
                       {
                         id: object.id,
                         patch: {
                           binding: {
-                            ...object.binding!,
+                            ...binding,
                             mode: e.target.value as CodexBinding['mode'],
                           },
                         } as Partial<CodexObject>,
@@ -538,7 +539,8 @@ function ChartCanonSection({ object }: { object: CodexChartObject }) {
 
   if (status !== 'ready') return null;
 
-  const entry = object.binding ? entries.find((e) => e.sourcePath === object.binding!.notePath) : undefined;
+  const binding = object.binding;
+  const entry = binding ? entries.find((e) => e.sourcePath === binding.notePath) : undefined;
   const fields = entry ? bindableFields(entry) : [];
 
   return (
@@ -549,11 +551,11 @@ function ChartCanonSection({ object }: { object: CodexChartObject }) {
         </p>
       )}
 
-      {object.binding && (
+      {binding && (
         <>
           <Row label="Note">
-            <span className="block truncate text-[11px] text-white/70" title={object.binding.notePath}>
-              {object.binding.notePath.split('/').pop()}
+            <span className="block truncate text-[11px] text-white/70" title={binding.notePath}>
+              {binding.notePath.split('/').pop()}
             </span>
           </Row>
 
@@ -627,6 +629,7 @@ function SigilSection({ object }: { object: CodexSigilObject }) {
     )?.id ?? '';
 
   const bevel = object.bevel;
+  const gradient = object.gradient;
 
   return (
     <Section title="Sigil">
@@ -680,24 +683,24 @@ function SigilSection({ object }: { object: CodexSigilObject }) {
         </label>
       </Row>
 
-      {object.gradient && (
+      {gradient && (
         <>
           <Row label="Angle">
             <Slider
               min={0}
               max={360}
               step={5}
-              value={object.gradient.angle ?? 115}
-              onChange={(v) => set({ gradient: { ...object.gradient!, angle: v } })}
+              value={gradient.angle ?? 115}
+              onChange={(v) => set({ gradient: { ...gradient, angle: v } })}
             />
           </Row>
-          {object.gradient.stops.map((stop, i) => (
+          {gradient.stops.map((stop, i) => (
             <Row
               key={i}
               label={
                 i === 0
                   ? 'Highlight'
-                  : i === object.gradient!.stops.length - 1
+                  : i === gradient.stops.length - 1
                     ? 'Shadow'
                     // Numbered: a metal ramp has several mid stops, and three
                     // rows all labelled "Body" cannot be told apart.
@@ -709,8 +712,8 @@ function SigilSection({ object }: { object: CodexSigilObject }) {
                 onChange={(v) =>
                   set({
                     gradient: {
-                      ...object.gradient!,
-                      stops: object.gradient!.stops.map((s, j) =>
+                      ...gradient,
+                      stops: gradient.stops.map((s, j) =>
                         j === i ? { ...s, color: v } : s,
                       ),
                     },
@@ -886,6 +889,8 @@ function EffectsSection({ selected }: { selected: CodexObject[] }) {
 
   const shadow = one.shadow ?? { color: '#000000', blur: 12, offsetX: 4, offsetY: 4, opacity: 0.5 };
   const glow = one.glow ?? { color: '#d8b45a', blur: 16, opacity: 0.85 };
+  const currentShadow = one.shadow;
+  const currentGlow = one.glow;
 
   return (
     <Section title="Effects">
@@ -894,13 +899,13 @@ function EffectsSection({ selected }: { selected: CodexObject[] }) {
         checked={Boolean(one.shadow)}
         onChange={(on) => patch({ shadow: on ? shadow : undefined })}
       />
-      {one.shadow && (
+      {currentShadow && (
         <>
-          <Row label="Colour"><ColorInput value={one.shadow.color} onChange={(v) => patch({ shadow: { ...one.shadow!, color: v } })} /></Row>
-          <Row label="Blur"><Slider min={0} max={60} step={1} value={one.shadow.blur} onChange={(v) => patch({ shadow: { ...one.shadow!, blur: v } })} /></Row>
-          <Row label="Offset X"><Slider min={-40} max={40} step={1} value={one.shadow.offsetX} onChange={(v) => patch({ shadow: { ...one.shadow!, offsetX: v } })} /></Row>
-          <Row label="Offset Y"><Slider min={-40} max={40} step={1} value={one.shadow.offsetY} onChange={(v) => patch({ shadow: { ...one.shadow!, offsetY: v } })} /></Row>
-          <Row label="Strength"><Slider min={0} max={1} step={0.05} value={one.shadow.opacity} onChange={(v) => patch({ shadow: { ...one.shadow!, opacity: v } })} /></Row>
+          <Row label="Colour"><ColorInput value={currentShadow.color} onChange={(v) => patch({ shadow: { ...currentShadow, color: v } })} /></Row>
+          <Row label="Blur"><Slider min={0} max={60} step={1} value={currentShadow.blur} onChange={(v) => patch({ shadow: { ...currentShadow, blur: v } })} /></Row>
+          <Row label="Offset X"><Slider min={-40} max={40} step={1} value={currentShadow.offsetX} onChange={(v) => patch({ shadow: { ...currentShadow, offsetX: v } })} /></Row>
+          <Row label="Offset Y"><Slider min={-40} max={40} step={1} value={currentShadow.offsetY} onChange={(v) => patch({ shadow: { ...currentShadow, offsetY: v } })} /></Row>
+          <Row label="Strength"><Slider min={0} max={1} step={0.05} value={currentShadow.opacity} onChange={(v) => patch({ shadow: { ...currentShadow, opacity: v } })} /></Row>
         </>
       )}
 
@@ -909,11 +914,11 @@ function EffectsSection({ selected }: { selected: CodexObject[] }) {
         checked={Boolean(one.glow)}
         onChange={(on) => patch({ glow: on ? glow : undefined })}
       />
-      {one.glow && (
+      {currentGlow && (
         <>
-          <Row label="Colour"><ColorInput value={one.glow.color} onChange={(v) => patch({ glow: { ...one.glow!, color: v } })} /></Row>
-          <Row label="Blur"><Slider min={0} max={80} step={1} value={one.glow.blur} onChange={(v) => patch({ glow: { ...one.glow!, blur: v } })} /></Row>
-          <Row label="Strength"><Slider min={0} max={1} step={0.05} value={one.glow.opacity} onChange={(v) => patch({ glow: { ...one.glow!, opacity: v } })} /></Row>
+          <Row label="Colour"><ColorInput value={currentGlow.color} onChange={(v) => patch({ glow: { ...currentGlow, color: v } })} /></Row>
+          <Row label="Blur"><Slider min={0} max={80} step={1} value={currentGlow.blur} onChange={(v) => patch({ glow: { ...currentGlow, blur: v } })} /></Row>
+          <Row label="Strength"><Slider min={0} max={1} step={0.05} value={currentGlow.opacity} onChange={(v) => patch({ glow: { ...currentGlow, opacity: v } })} /></Row>
         </>
       )}
       {one.glow && one.shadow && (

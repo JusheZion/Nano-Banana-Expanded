@@ -258,9 +258,10 @@ export function resolveBindings(
       });
     } else if (object.kind === 'chart') {
       if (!isLive(object.binding)) continue;
-      const entry = entriesByPath.get(object.binding.notePath);
+      const binding = object.binding;
+      const entry = entriesByPath.get(binding.notePath);
       if (!entry) {
-        missingNotes.push({ id: object.id, notePath: object.binding.notePath });
+        missingNotes.push({ id: object.id, notePath: binding.notePath });
         continue;
       }
       let changed = false;
@@ -270,7 +271,7 @@ export function resolveBindings(
         if (n === null) {
           missingFields.push({
             id: object.id,
-            notePath: object.binding!.notePath,
+            notePath: binding.notePath,
             field: axis.field,
           });
           return axis;
@@ -284,7 +285,7 @@ export function resolveBindings(
           id: object.id,
           patch: {
             axes,
-            binding: { ...object.binding, resolvedAt: now },
+            binding: { ...binding, resolvedAt: now },
           } as Partial<CodexObject>,
         });
       }

@@ -18,7 +18,12 @@ if (import.meta.env.DEV) {
   console.info('[ARCS] VITE_GEMINI_API_KEY loaded:', Boolean(import.meta.env.VITE_GEMINI_API_KEY))
 }
 
-createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root')
+if (!rootElement) {
+  throw new Error('ARCS could not start because the #root mount element is missing.')
+}
+
+createRoot(rootElement).render(
   <StrictMode>
     <ResponsiveLayoutProvider>
       <ThemeProvider>
