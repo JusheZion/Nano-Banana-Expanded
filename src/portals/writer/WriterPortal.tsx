@@ -114,6 +114,7 @@ import {
   runWriterPageBeatsBatchRequestWithRetries,
 } from '@/portals/writer/writerPageBeatsBatch';
 import { useWriterHotkeys } from '@/portals/writer/useWriterHotkeys';
+import { useWriterVisualReferenceAlbums } from '@/portals/writer/useWriterVisualReferenceAlbums';
 import { getWriterQuickGenerateNextHint } from '@/portals/writer/writerNextStep';
 import { useWriterMotionVisit } from '@/portals/writer/writerMotion';
 import { consumeWriterFileInputSelection } from '@/portals/writer/writerFileInput';
@@ -874,13 +875,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [synopsisHelperParts, setSynopsisHelperParts] = useState<SynopsisHelperParts>({
     ...EMPTY_SYNOPSIS_HELPER_PARTS,
   });
-  const [writerVisualReferenceAlbums, setWriterVisualReferenceAlbums] = useState<{
-    characters: VaultCharacterAlbum[];
-    assets: VaultAssetAlbum[];
-  }>({ characters: [], assets: [] });
-  const [writerVisualReferencesLoading, setWriterVisualReferencesLoading] = useState(false);
   const [writerVisualReferencesBusy, setWriterVisualReferencesBusy] = useState(false);
-  const [writerVisualReferencesError, setWriterVisualReferencesError] = useState<string | null>(null);
   const [writerVisualReferenceSource, setWriterVisualReferenceSource] = useState<'character_vault' | 'asset_vault'>(
     'character_vault',
   );
@@ -1822,32 +1817,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }, [selectedIssueId, issues, selectedSeries]);
 
   useEffect(() => {
-    if (!selectedIssueId) {
-      setWriterVisualReferenceAlbums({ characters: [], assets: [] });
-      setWriterVisualReferenceIds([]);
-      setWriterVisualReferenceProfile('');
-      setWriterVisualReferenceCollection('');
-      setWriterVisualReferencesError(null);
-      return;
-    }
-    let cancelled = false;
-    setWriterVisualReferencesLoading(true);
-    setWriterVisualReferencesError(null);
-    void Promise.all([getCharacterAlbums(), getAssetAlbums()])
-      .then(([characters, assets]) => {
-        if (cancelled) return;
-        setWriterVisualReferenceAlbums({ characters, assets });
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        setWriterVisualReferencesError(error instanceof Error ? error.message : 'Could not load vault references.');
-      })
-      .finally(() => {
-        if (!cancelled) setWriterVisualReferencesLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    setWriterVisualReferenceIds([]);
+    setWriterVisualReferenceProfile('');
+    setWriterVisualReferenceCollection('');
   }, [selectedIssueId]);
 
   useEffect(() => {
@@ -1868,6 +1840,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const latestOutline = outlines[0];
   const latestShotPlan = shotPlans[0];
   const selectedIssue = issues.find((i) => i.id === selectedIssueId) ?? null;
+  const {
+    albums: writerVisualReferenceAlbums,
+    loading: writerVisualReferencesLoading,
+    error: writerVisualReferencesError,
+    refresh: refreshWriterVisualReferenceAlbums,
+    setError: setWriterVisualReferencesError,
+  } = useWriterVisualReferenceAlbums(selectedIssueId);
   useEffect(() => {
     if (lastReviewedInsert || !selectedIssue || !outlines.length) return;
     const recovery = rehydrateReviewedOutlineRecovery(selectedIssue.notes, outlines);
@@ -1969,20 +1948,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     [selectedIssueId],
   );
 
-  const refreshWriterVisualReferenceAlbums = useCallback(async () => {
-    if (!selectedIssueId) return;
-    setWriterVisualReferencesLoading(true);
-    setWriterVisualReferencesError(null);
-    try {
-      const [characters, assets] = await Promise.all([getCharacterAlbums(), getAssetAlbums()]);
-      setWriterVisualReferenceAlbums({ characters, assets });
-    } catch (error) {
-      setWriterVisualReferencesError(error instanceof Error ? error.message : 'Could not load vault references.');
-    } finally {
-      setWriterVisualReferencesLoading(false);
-    }
-  }, [selectedIssueId]);
-
   const attachWriterVisualReference = useCallback(async () => {
     if (!selectedIssue) return;
     setWriterVisualReferencesError(null);
@@ -2048,6 +2013,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     synopsisHelperParts,
     updateSelectedIssueNotes,
     pushHistory,
+    setWriterVisualReferencesError,
   ]);
 
   const removeWriterVisualReference = useCallback(
@@ -2063,7 +2029,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       }
       pushHistory(`removed visual reference “${ref.label}”`);
     },
-    [selectedIssue, updateSelectedIssueNotes, pushHistory],
+    [selectedIssue, updateSelectedIssueNotes, pushHistory, setWriterVisualReferencesError],
   );
 
   const saveWriterVisualReferenceEdit = useCallback(
@@ -2087,17 +2053,23 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       }
       pushHistory(`updated visual reference “${draft.label.trim() || ref.label}”`);
     },
-    [selectedIssue, writerVisualReferenceEditDrafts, updateSelectedIssueNotes, pushHistory],
+    [
+      selectedIssue,
+      writerVisualReferenceEditDrafts,
+      updateSelectedIssueNotes,
+      pushHistory,
+      setWriterVisualReferencesError,
+    ],
   );
 
   const refreshAttachedWriterVisualReferences = useCallback(async () => {
     if (!selectedIssue || writerVisualReferences.length === 0) return;
     setWriterVisualReferencesError(null);
     setWriterVisualReferencesBusy(true);
-    setWriterVisualReferencesLoading(true);
     try {
-      const [characters, assets] = await Promise.all([getCharacterAlbums(), getAssetAlbums()]);
-      setWriterVisualReferenceAlbums({ characters, assets });
+      const albums = await refreshWriterVisualReferenceAlbums();
+      if (!albums) return;
+      const { characters, assets } = albums;
       let refreshedCount = 0;
       let nextNotes = selectedIssue.notes;
 
@@ -2142,9 +2114,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setWriterVisualReferencesError(error instanceof Error ? error.message : 'Could not refresh attached references.');
     } finally {
       setWriterVisualReferencesBusy(false);
-      setWriterVisualReferencesLoading(false);
     }
-  }, [selectedIssue, writerVisualReferences, updateSelectedIssueNotes, pushHistory]);
+  }, [
+    selectedIssue,
+    writerVisualReferences,
+    updateSelectedIssueNotes,
+    pushHistory,
+    refreshWriterVisualReferenceAlbums,
+    setWriterVisualReferencesError,
+  ]);
 
   const persistWriterDrafts = useCallback(
     async (drafts: Partial<Record<WriterDraftKey, string>>) => {

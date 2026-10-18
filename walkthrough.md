@@ -17478,3 +17478,73 @@ Modified:
 ### Next steps
 
 - Continue the scheduled weekly audit from this verified baseline.
+
+## Weekly ARCS Writer visual-reference request ownership - 2026-10-18
+
+### What changed
+
+- Prevented an older Writer Visual Canon vault refresh from overwriting the
+  newest Character Vault and Asset Vault results when requests finish out of
+  order.
+- Prevented late vault responses from a previously selected issue from
+  publishing data, errors, or loading state after the user changes issues.
+- Extracted visual-reference album loading, error handling, issue scoping, and
+  latest-request ownership from the monolithic Writer portal into a dedicated
+  typed hook.
+- Routed attached-reference refreshes through the same owned request path so an
+  issue change or newer refresh safely cancels the stale continuation.
+- Added the extracted error setter to every affected callback dependency array
+  and added adversarial hook regressions for overlapping requests, issue
+  changes, successful loads, and failures.
+
+### Files touched
+
+- `src/portals/writer/useWriterVisualReferenceAlbums.ts`
+- `src/portals/writer/__tests__/useWriterVisualReferenceAlbums.test.tsx`
+- `src/portals/writer/WriterPortal.tsx`
+- `walkthrough.md`
+- `logs/agent-change-log.md`
+
+### Implementation notes
+
+- Each album request receives a monotonically increasing sequence number and
+  captures its issue ID. Only the request that still owns both values may
+  publish albums, errors, or completion state.
+- The hook returns empty scoped data immediately when issue identity changes,
+  avoiding a render where the newly selected issue can display the prior
+  issue's vault choices.
+- The audit found no executable production `any`, TypeScript build mismatch,
+  untyped Vite environment variable, or unhandled public asset base path.
+- Existing hook-dependency suppressions were inspected and remain limited to
+  documented Konva measurement invalidation and deliberate editor-draft
+  reinitialization boundaries.
+- The DOX pass left `AGENTS.md` unchanged because this internal lifecycle
+  extraction does not change a durable product contract, ownership boundary,
+  workflow, permission, or child index.
+
+### Verification
+
+- Focused visual-reference lifecycle verification: 1 file / 5 tests passed.
+- `npx tsc -b --pretty false` - PASS.
+- `npm run lint` - PASS, 0 errors and 0 ESLint warnings.
+- `npm run test -- --run` - PASS, 191 files / 1,658 tests.
+- `npm run build` - PASS, 2,697 modules transformed.
+
+### Outstanding issues
+
+- None in the changed surfaces.
+
+### Risks or caveats
+
+- Browserslist reports that `caniuse-lite` is seven months old. This remains a
+  non-blocking maintenance notice and was not changed during the audit.
+- No deployment, production-data mutation, live Supabase write, dependency
+  update, or credential access was performed.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- Continue the scheduled weekly audit from this verified baseline.

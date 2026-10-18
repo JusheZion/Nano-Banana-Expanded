@@ -389,3 +389,44 @@
   - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remain user-owned and uncommitted.
   - The DOX pass left AGENTS files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
   - No deployment, production-data mutation, live Supabase write, dependency update, or credential access was performed.
+
+### 2026-10-18 00:09 EDT - Refactor: Own Writer visual-reference refreshes
+
+- Job ID: 20261018-000231-arcs-writer-visual-reference-ownership
+- Workflow: Heavy
+- Workflow version: lean-routing-2026-08-03
+- Model: GPT-5
+- Started: 2026-10-18 00:02 EDT
+- Finished: 2026-10-18 00:09 EDT
+- Elapsed: 7m
+- Feature or system area: Writer Visual Canon vault loading and issue lifecycle
+- Initial outcome: partial - static analysis found unowned manual and attached-reference refreshes in the Writer portal.
+- Outcome: success
+- Rerouted: none
+- Failed fix attempts: 0
+- Bugs:
+  - Pre-existing: 3
+  - Introduced and caught: 1
+  - Escaped regression: 0
+- Release result: success
+- Related job ID: 20261011-000125-arcs-weekly-prompt-library
+- Files changed:
+  - Writer visual-reference album hook, Writer portal integration, lifecycle regressions, `walkthrough.md`, and this log.
+- Steps taken:
+  1. Re-established passing TypeScript and lint baselines and audited executable `any`, null assertions, React effects, async ownership, Vite environment declarations, and public asset routing.
+  2. Identified that overlapping Writer vault refreshes could publish stale albums, stale errors, or premature loading completion and that issue changes did not invalidate the manual refresh path.
+  3. Extracted a typed issue-scoped hook with request sequences and routed initial, manual, and attached-reference loads through the same ownership boundary.
+  4. Added adversarial regressions for out-of-order completion and issue switching, plus success and failure coverage.
+  5. Ran focused and complete gates, completed the DOX pass, and preserved unrelated worktree changes.
+- Tests run:
+  - Focused visual-reference hook verification - passed, 1 file / 5 tests.
+  - `npx tsc -b --pretty false` - passed.
+  - `npm run lint` - passed, 0 errors / 0 warnings.
+  - `npm run test -- --run` - passed, 191 files / 1,658 tests.
+  - `npm run build` - passed, 2,697 modules transformed.
+- Notes:
+  - The three pre-existing defects were stale album publication, stale error/loading publication, and continuation of an attached-reference refresh after its issue ownership changed.
+  - The introduced-and-caught issue was three exhaustive-dependencies warnings after replacing React state setters with the extracted hook callback; all dependency arrays were corrected before final gates.
+  - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remain user-owned and uncommitted.
+  - The DOX pass left AGENTS files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
+  - No deployment, production-data mutation, live Supabase write, dependency update, or credential access was performed.
