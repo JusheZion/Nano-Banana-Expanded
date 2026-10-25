@@ -139,7 +139,9 @@ export function WriterOutlineTreatmentReadableReview({
                   {item.page !== null ? (
                     <button
                       type="button"
-                      onClick={() => goToPage(item.page!)}
+                      onClick={() => {
+                        if (item.page !== null) goToPage(item.page);
+                      }}
                       className="rounded-md border border-slate-400 bg-white px-3 py-1.5 text-xs font-black text-slate-950 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700/50"
                     >
                       Go to page {item.page}

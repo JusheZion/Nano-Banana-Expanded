@@ -35,9 +35,10 @@ export const WikiPortal: React.FC<WikiPortalProps> = ({ jumpNonce, jump, onNavig
   }, [jumpNonce, jump?.chapterId]);
 
   useEffect(() => {
-    if (!jump?.headingId || !selectedId) return;
+    const headingId = jump?.headingId;
+    if (!headingId || !selectedId) return;
     const t = window.setTimeout(() => {
-      document.getElementById(jump.headingId!)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById(headingId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
     return () => clearTimeout(t);
   }, [jumpNonce, jump?.headingId, selectedId]);

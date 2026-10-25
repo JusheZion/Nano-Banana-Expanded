@@ -336,7 +336,7 @@ export function CodexShortcutsDialog({ isMac, onClose }: { isMac: boolean; onClo
                   <div key={command.id} className="flex items-baseline justify-between gap-4">
                     <dt className="text-[12px] text-white/75">{command.label}</dt>
                     <dd className="shrink-0 font-mono text-[10.5px] tabular-nums text-white/45">
-                      {formatShortcut(command.shortcut!, isMac)}
+                      {command.shortcut ? formatShortcut(command.shortcut, isMac) : null}
                     </dd>
                   </div>
                 ))}

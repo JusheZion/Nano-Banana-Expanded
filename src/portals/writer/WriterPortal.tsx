@@ -36,7 +36,6 @@ import {
   listWriterOutlinesForIssueResult,
   listWriterPages,
   listWriterPagesResult,
-  listWriterLoreCards,
   listWriterSeries,
   listWriterShotPlansForIssue,
   listTrashedWriterIssues,
@@ -114,7 +113,9 @@ import {
   runWriterPageBeatsBatchRequestWithRetries,
 } from '@/portals/writer/writerPageBeatsBatch';
 import { useWriterHotkeys } from '@/portals/writer/useWriterHotkeys';
+import { useWriterLoreCards } from '@/portals/writer/useWriterLoreCards';
 import { useWriterVisualReferenceAlbums } from '@/portals/writer/useWriterVisualReferenceAlbums';
+import { WriterLoreLoadError } from '@/portals/writer/WriterLoreLoadError';
 import { getWriterQuickGenerateNextHint } from '@/portals/writer/writerNextStep';
 import { useWriterMotionVisit } from '@/portals/writer/writerMotion';
 import { consumeWriterFileInputSelection } from '@/portals/writer/writerFileInput';
@@ -957,8 +958,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [shotEditDraft, setShotEditDraft] = useState('');
   const [scriptsBusy, setScriptsBusy] = useState(false);
   const [scriptsError, setScriptsError] = useState<string | null>(null);
-  const [loreCards, setLoreCards] = useState<WriterLoreCardRow[]>([]);
-  const [loreBusy, setLoreBusy] = useState(false);
+  const {
+    cards: loreCards,
+    loading: loreLoading,
+    error: loreLoadError,
+    refresh: reloadLoreCards,
+  } = useWriterLoreCards(selectedSeriesId);
+  const [loreMutationBusy, setLoreMutationBusy] = useState(false);
+  const loreBusy = loreLoading || loreMutationBusy;
   const [loreDraftTitle, setLoreDraftTitle] = useState('');
   const [loreDraftCategory, setLoreDraftCategory] = useState('world');
   const [loreDraftBody, setLoreDraftBody] = useState('');
@@ -1507,18 +1514,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   useEffect(() => {
     setSelectedPageIdsForBatch([]);
   }, [selectedIssueId]);
-
-  const reloadLoreCards = useCallback(async () => {
-    if (!selectedSeriesId) {
-      setLoreCards([]);
-      return;
-    }
-    setLoreCards([]);
-    setLoreBusy(true);
-    const rows = await listWriterLoreCards(selectedSeriesId);
-    setLoreCards(rows);
-    setLoreBusy(false);
-  }, [selectedSeriesId]);
 
   const runLoreJsonImport = useCallback(async () => {
     if (!selectedSeriesId) return;
@@ -9976,7 +9971,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               disabled={!supabaseOk || loreBusy || !loreDraftTitle.trim()}
                               onClick={async () => {
                                 if (!selectedSeriesId || !loreDraftTitle.trim()) return;
-                                setLoreBusy(true);
+                                setLoreMutationBusy(true);
                                 if (loreEditingId) {
                                   const ok = await updateWriterLoreCard(loreEditingId, {
                                     title: loreDraftTitle.trim(),
@@ -9985,7 +9980,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                     include_in_prompt: loreDraftInclude,
                                     sort_order: loreDraftSort,
                                   });
-                                  setLoreBusy(false);
+                                  setLoreMutationBusy(false);
                                   if (!ok) {
                                     pushHistory('error: save lore card');
                                     return;
@@ -10000,7 +9995,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                     include_in_prompt: loreDraftInclude,
                                     sort_order: loreDraftSort,
                                   });
-                                  setLoreBusy(false);
+                                  setLoreMutationBusy(false);
                                   if (!row) {
                                     pushHistory('error: create lore card');
                                     return;
@@ -10188,11 +10183,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               </div>
                               {loreBusy ? <span role="status" className="text-xs font-semibold text-black/60">Updating…</span> : null}
                             </div>
-                            {loreCards.length === 0 ? (
+                            <WriterLoreLoadError
+                              error={loreLoadError}
+                              loading={loreLoading}
+                              onRetry={() => void reloadLoreCards()}
+                            />
+                            {loreCards.length === 0 && !loreLoadError ? (
                               <p className="mt-4 border-l-2 border-amber-700 bg-amber-50/70 px-4 py-3 text-sm font-semibold text-black/65">
                                 No Story Canon cards yet. Use New card above to add the first fact the AI should remember.
                               </p>
-                            ) : (
+                            ) : loreCards.length > 0 ? (
                               <ul className="mt-4 grid gap-3 md:grid-cols-2">
                                 {loreCards.map((card) => (
                                   <li key={card.id} className="border-l-2 border-black/25 bg-white/65 px-4 py-3">
@@ -10223,9 +10223,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                           disabled={loreBusy}
                                           onClick={async () => {
                                             if (!window.confirm(`Delete Story Canon card “${card.title || 'Untitled'}”? This cannot be undone.`)) return;
-                                            setLoreBusy(true);
+                                            setLoreMutationBusy(true);
                                             const ok = await deleteWriterLoreCard(card.id);
-                                            setLoreBusy(false);
+                                            setLoreMutationBusy(false);
                                             if (!ok) {
                                               pushHistory('error: delete lore card');
                                               return;
@@ -10245,7 +10245,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                   </li>
                                 ))}
                               </ul>
-                            )}
+                            ) : null}
                           </section>
                         ) : null}
                         {!writerFocusedMode ? (
@@ -10533,11 +10533,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
                             Cards ({loreCards.length})
                           </p>
+                          <WriterLoreLoadError
+                            error={loreLoadError}
+                            loading={loreLoading}
+                            onRetry={() => void reloadLoreCards()}
+                          />
                           {loreBusy && loreCards.length === 0 ? (
                             <p className="text-xs text-black/50">Loading…</p>
-                          ) : loreCards.length === 0 ? (
+                          ) : loreCards.length === 0 && !loreLoadError ? (
                             <p className="text-xs text-black/50">No lore cards yet. Add one above.</p>
-                          ) : (
+                          ) : loreCards.length > 0 ? (
                             <ul className="space-y-2 max-w-4xl">
                               {loreCards.map((c) => {
                                 const importMetadata = readLoreImportMetadataFromBody(c.body);
@@ -10604,9 +10609,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                       disabled={loreBusy}
                                       onClick={async () => {
                                         if (!window.confirm('Delete this lore card?')) return;
-                                        setLoreBusy(true);
+                                        setLoreMutationBusy(true);
                                         const ok = await deleteWriterLoreCard(c.id);
-                                        setLoreBusy(false);
+                                        setLoreMutationBusy(false);
                                         if (!ok) {
                                           pushHistory('error: delete lore card');
                                           return;
@@ -10631,7 +10636,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 );
                               })}
                             </ul>
-                          )}
+                          ) : null}
                         </div>
                           </>
                         ) : null}

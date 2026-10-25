@@ -57,8 +57,11 @@ export function useWriterHotkeys(options: {
       if (mod && e.altKey && !e.shiftKey) {
         const n = Number(e.key);
         if (n >= 1 && n <= TAB_ORDER.length) {
-          e.preventDefault();
-          onWorkspaceTab(TAB_ORDER[n - 1]!);
+          const tab = TAB_ORDER[n - 1];
+          if (tab) {
+            e.preventDefault();
+            onWorkspaceTab(tab);
+          }
         }
       }
     };

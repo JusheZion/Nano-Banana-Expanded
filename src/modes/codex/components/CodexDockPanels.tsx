@@ -37,7 +37,8 @@ export const CodexLayersPanel = memo(function CodexLayersPanel({
         <p className="p-3 text-xs text-white/40">This plate is empty.</p>
       )}
       {[...plate.objects].reverse().map((object) => {
-        const groupNumber = object.groupId ? groupNumbers.get(object.groupId) : undefined;
+        const groupId = object.groupId;
+        const groupNumber = groupId ? groupNumbers.get(groupId) : undefined;
         return (
         <div
           key={object.id}
@@ -51,7 +52,9 @@ export const CodexLayersPanel = memo(function CodexLayersPanel({
         >
           {groupNumber !== undefined && (
             <button
-              onClick={() => onSelectGroup(object.groupId!)}
+              onClick={() => {
+                if (groupId) onSelectGroup(groupId);
+              }}
               title={`Select group ${groupNumber}`}
               aria-label={`Select group ${groupNumber}`}
               className="shrink-0 rounded bg-sky-300/15 px-1 text-[9px] leading-4 text-sky-200/80 hover:bg-sky-300/30 focus:outline-none focus:ring-1 focus:ring-sky-300/60"

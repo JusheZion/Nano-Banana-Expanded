@@ -124,7 +124,8 @@ export const WriterSearchableMenu = memo(function WriterSearchableMenu({
           }
           if (event.key === 'Enter' && open && activeIndex >= 0 && activeIndex < filteredOptions.length) {
             event.preventDefault();
-            pick(filteredOptions[activeIndex]!);
+            const activeOption = filteredOptions[activeIndex];
+            if (activeOption) pick(activeOption);
           }
         }}
         placeholder={placeholder}

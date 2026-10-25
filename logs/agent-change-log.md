@@ -389,7 +389,6 @@
   - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remain user-owned and uncommitted.
   - The DOX pass left AGENTS files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
   - No deployment, production-data mutation, live Supabase write, dependency update, or credential access was performed.
-
 ### 2026-10-18 00:09 EDT - Refactor: Own Writer visual-reference refreshes
 
 - Job ID: 20261018-000231-arcs-writer-visual-reference-ownership
@@ -427,6 +426,73 @@
 - Notes:
   - The three pre-existing defects were stale album publication, stale error/loading publication, and continuation of an attached-reference refresh after its issue ownership changed.
   - The introduced-and-caught issue was three exhaustive-dependencies warnings after replacing React state setters with the extracted hook callback; all dependency arrays were corrected before final gates.
+  - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remain user-owned and uncommitted.
+  - The DOX pass left AGENTS files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
+  - No deployment, production-data mutation, live Supabase write, dependency update, or credential access was performed.
+
+### 2026-10-25 00:04 EDT - Refactor: Own Story Canon scoped reads
+
+- Job ID: 20261024-235531-arcs-story-canon-ownership
+- Workflow: Heavy
+- Workflow version: lean-routing-2026-08-03
+- Model: GPT-5
+- Started: 2026-10-24 23:55 EDT
+- Finished: 2026-10-25 00:04 EDT
+- Elapsed: 9m
+- Feature or system area: Writer Story Canon loading, shared async lifecycle, and TypeScript narrowing
+- Initial outcome: partial - the first shared-hook implementation refreshed indefinitely when a caller supplied an unstable initial-value identity.
+- Outcome: success
+- Rerouted: none
+- Failed fix attempts: 1
+- Bugs:
+  - Pre-existing: 4
+  - Introduced and caught: 1
+  - Escaped regression: 0
+- Release result: success
+- Related job ID: 20261018-000231-arcs-writer-visual-reference-ownership
+- Files changed:
+  - `src/shared/hooks/useScopedAsyncResource.ts`
+  - `src/shared/hooks/__tests__/useScopedAsyncResource.test.tsx`
+  - `src/shared/api/arcsWriterRoom.ts`
+  - `src/shared/api/__tests__/arcsWriterRoomLoreList.test.ts`
+  - `src/portals/writer/useWriterLoreCards.ts`
+  - `src/portals/writer/__tests__/useWriterLoreCards.test.tsx`
+  - `src/portals/writer/useWriterVisualReferenceAlbums.ts`
+  - `src/portals/writer/__tests__/useWriterVisualReferenceAlbums.test.tsx`
+  - `src/portals/writer/WriterLoreLoadError.tsx`
+  - `src/portals/writer/__tests__/WriterLoreLoadError.test.tsx`
+  - `src/portals/writer/WriterPortal.tsx`
+  - `src/portals/writer/WriterSearchableMenu.tsx`
+  - `src/portals/writer/WriterRibbon.tsx`
+  - `src/portals/writer/useWriterHotkeys.ts`
+  - `src/portals/writer/WriterOutlineTreatmentReadableReview.tsx`
+  - `src/portals/WikiPortal.tsx`
+  - `src/modes/codex/components/CodexMenus.tsx`
+  - `src/modes/codex/components/CodexDockPanels.tsx`
+  - `src/modes/comic/components/CanvasContextMenu.tsx`
+  - `walkthrough.md`
+- Steps taken:
+  1. Re-established passing TypeScript, lint, 1,658-test, and production-build baselines and audited TypeScript, React lifecycle, Vite environment, and public asset surfaces.
+  2. Confirmed that Story Canon erased valid content while refreshing, hid read failures as empty data, and allowed stale series or overlapping responses to publish.
+  3. Added an explicit lore-list result, extracted a reusable scoped async resource module, and migrated Story Canon plus Visual Canon adapters onto it.
+  4. Added accessible loading/error/retry behavior in both Writer views and extracted the reusable error surface from the monolithic portal.
+  5. Removed avoidable UI non-null assertions, ran focused and complete gates, completed the DOX pass, and preserved unrelated worktree changes.
+- Tests run:
+  - Baseline `npx tsc -b --pretty false` - passed.
+  - Baseline `npm run lint` - passed, 0 errors / 0 warnings.
+  - Baseline `npm run test -- --run` - passed, 191 files / 1,658 tests.
+  - Baseline `npm run build` - passed, 2,697 modules transformed.
+  - First focused run - failed: unsupported jest-dom assertions were corrected, and the new generic hook's unstable initial-value dependency caused a worker OOM until the initial snapshot was moved behind a ref.
+  - Focused verification - passed, 5 files / 12 tests.
+  - Final `npx tsc -b --pretty false` - passed.
+  - Final `npm run lint` - passed, 0 errors / 0 warnings.
+  - Final `npm run test -- --run` - passed, 195 files / 1,665 tests.
+  - Final `npm run build` - passed, 2,700 modules transformed.
+- Notes:
+  - The four pre-existing defects were stale cross-series publication, stale overlapping refresh publication, silent read-failure-to-empty conversion, and clearing valid cards during same-series refreshes.
+  - The introduced-and-caught defect was the first generic hook effect depending on an unstable initial-value identity; storing the initial snapshot in a ref removed the loop without weakening scope invalidation.
+  - The unsupported jest-dom assertions were a test-harness mismatch, not a product defect; native Vitest/DOM assertions replaced them.
+  - Live authenticated Story Canon interaction was not available; deterministic hook, API, and accessible UI regressions cover the changed surface.
   - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remain user-owned and uncommitted.
   - The DOX pass left AGENTS files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
   - No deployment, production-data mutation, live Supabase write, dependency update, or credential access was performed.

@@ -820,20 +820,33 @@ export async function clearWriterPageScript(pageId: string): Promise<{ ok: boole
 }
 
 export async function listWriterLoreCards(seriesId: string): Promise<WriterLoreCardRow[]> {
-  if (!isSupabaseConfigured() || !supabase) return [];
-  const { data, error } = await supabase
-    .from('writer_lore_cards')
-    .select(
-      'id, series_id, title, category, body, include_in_prompt, sort_order, created_at, updated_at',
-    )
-    .eq('series_id', seriesId)
-    .order('sort_order', { ascending: true })
-    .order('title', { ascending: true });
-  if (error) {
-    console.warn('[arcsWriterRoom] listWriterLoreCards', error.message);
-    return [];
+  const result = await listWriterLoreCardsResult(seriesId);
+  return result.ok ? result.rows : [];
+}
+
+export async function listWriterLoreCardsResult(
+  seriesId: string,
+): Promise<{ ok: true; rows: WriterLoreCardRow[] } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
+  try {
+    const { data, error } = await supabase
+      .from('writer_lore_cards')
+      .select(
+        'id, series_id, title, category, body, include_in_prompt, sort_order, created_at, updated_at',
+      )
+      .eq('series_id', seriesId)
+      .order('sort_order', { ascending: true })
+      .order('title', { ascending: true });
+    if (error) {
+      console.warn('[arcsWriterRoom] listWriterLoreCards', error.message);
+      return { ok: false, error: error.message };
+    }
+    return { ok: true, rows: (data ?? []) as WriterLoreCardRow[] };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unexpected lore-card list error';
+    console.warn('[arcsWriterRoom] listWriterLoreCards', message);
+    return { ok: false, error: message };
   }
-  return (data ?? []) as WriterLoreCardRow[];
 }
 
 export async function createWriterLoreCard(input: {

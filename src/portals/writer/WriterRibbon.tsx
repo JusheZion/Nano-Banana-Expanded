@@ -143,7 +143,8 @@ export const WriterRibbon: React.FC<Props> = ({
     if (nextIndex === null) return;
 
     event.preventDefault();
-    const nextMenu = MENUS[nextIndex]!;
+    const nextMenu = MENUS[nextIndex];
+    if (!nextMenu) return;
     onActiveMenu(nextMenu.id);
     menuTabRefs.current[nextIndex]?.focus();
   };

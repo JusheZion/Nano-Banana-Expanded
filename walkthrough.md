@@ -17548,3 +17548,94 @@ Modified:
 ### Next steps
 
 - Continue the scheduled weekly audit from this verified baseline.
+
+## Weekly ARCS Story Canon async ownership and error-state refactor - 2026-10-25
+
+### What changed
+
+- Prevented late Story Canon reads from a previously selected series from
+  replacing the current series' cards.
+- Prevented older overlapping refreshes from overwriting newer Story Canon
+  results or clearing their loading state early.
+- Stopped treating Supabase read failures as a valid empty canon. Focused and
+  advanced Writer views now show an accessible error with a retry action.
+- Preserved prior valid cards during same-series refreshes while still clearing
+  cross-series data immediately.
+- Extracted request sequencing, scope ownership, error handling, and unmount
+  invalidation into `useScopedAsyncResource`, then migrated both Story Canon
+  and Visual Canon to that shared deep module.
+- Extracted the reusable Story Canon error/retry surface from the monolithic
+  Writer portal and separated background loading from card mutations.
+- Replaced avoidable production non-null assertions in Wiki navigation, Writer
+  search/hotkeys/ribbon/review controls, Codex menus/layers, and comic panel
+  context actions with explicit narrowing.
+
+### Files touched
+
+- `src/shared/hooks/useScopedAsyncResource.ts`
+- `src/shared/hooks/__tests__/useScopedAsyncResource.test.tsx`
+- `src/shared/api/arcsWriterRoom.ts`
+- `src/shared/api/__tests__/arcsWriterRoomLoreList.test.ts`
+- `src/portals/writer/useWriterLoreCards.ts`
+- `src/portals/writer/__tests__/useWriterLoreCards.test.tsx`
+- `src/portals/writer/useWriterVisualReferenceAlbums.ts`
+- `src/portals/writer/__tests__/useWriterVisualReferenceAlbums.test.tsx`
+- `src/portals/writer/WriterLoreLoadError.tsx`
+- `src/portals/writer/__tests__/WriterLoreLoadError.test.tsx`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/WriterSearchableMenu.tsx`
+- `src/portals/writer/WriterRibbon.tsx`
+- `src/portals/writer/useWriterHotkeys.ts`
+- `src/portals/writer/WriterOutlineTreatmentReadableReview.tsx`
+- `src/portals/WikiPortal.tsx`
+- `src/modes/codex/components/CodexMenus.tsx`
+- `src/modes/codex/components/CodexDockPanels.tsx`
+- `src/modes/comic/components/CanvasContextMenu.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `useScopedAsyncResource` presents one small interface for scoped asynchronous
+  state while hiding sequence IDs, stale-result rejection, same-scope content
+  preservation, cross-scope clearing, errors, and unmount cleanup.
+- `listWriterLoreCardsResult` distinguishes successful empty results from
+  returned or thrown Supabase failures while retaining the compatibility list
+  helper for existing callers.
+- The deeper shared hook now owns lifecycle regressions that were previously
+  duplicated in the Visual Canon adapter; adapter tests retain only source
+  integration behavior.
+- No executable production `any`, TypeScript mismatch, incorrect Vite
+  environment declaration, or unhandled public asset base path was found.
+- The DOX pass left `AGENTS.md` unchanged because the root already owns
+  `src/shared` and `src/portals`; no product contract, ownership boundary,
+  workflow, permission, or child index changed.
+
+### Verification
+
+- Focused scoped-resource, lore API/hook/UI, and Visual Canon verification:
+  5 files / 12 tests passed.
+- `npx tsc -b --pretty false` - PASS.
+- `npm run lint` - PASS, 0 errors and 0 ESLint warnings.
+- `npm run test -- --run` - PASS, 195 files / 1,665 tests.
+- `npm run build` - PASS, 2,700 modules transformed.
+
+### Outstanding issues
+
+- Live authenticated Story Canon interaction was not exercised in this
+  automation session; deterministic lifecycle and UI regressions cover the
+  changed behavior.
+
+### Risks or caveats
+
+- Browserslist reports that `caniuse-lite` is seven months old. This remains a
+  non-blocking maintenance notice and was not changed.
+- No deployment, production-data mutation, live Supabase write, dependency
+  update, or credential access was performed.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- Continue the scheduled weekly audit from this verified baseline.

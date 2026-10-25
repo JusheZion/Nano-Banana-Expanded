@@ -76,9 +76,20 @@ export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenForm
   };
 
   const handleDelete = () => {
-    if (contextMenu.pageId && (contextMenu.balloonId || contextMenu.panelId)) {
-      removeElement(contextMenu.pageId, contextMenu.balloonId ?? contextMenu.panelId!);
+    const elementId = contextMenu.balloonId ?? contextMenu.panelId;
+    if (contextMenu.pageId && elementId) {
+      removeElement(contextMenu.pageId, elementId);
     }
+    closeContextMenu();
+  };
+
+  const handlePanelShape = (shapeType: 'rect' | 'ellipse' | 'halfCircle' | 'quarterCircle' | 'sector') => {
+    const { pageId, panelId } = contextMenu;
+    if (!pageId || !panelId) return;
+    updatePanel(pageId, panelId, {
+      shapeType,
+      ...(shapeType === 'sector' ? { centralAngle: 90 } : {}),
+    });
     closeContextMenu();
   };
 
@@ -192,11 +203,11 @@ export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenForm
           </button>
           <div className="my-1 border-t border-white/15" />
           <div className="px-3 py-1 text-[10px] font-bold uppercase opacity-70 text-[#001a4d]">Change shape</div>
-          <button type="button" onClick={() => { updatePanel(contextMenu.pageId!, contextMenu.panelId!, { shapeType: 'rect' }); closeContextMenu(); }} className={itemClass}>Rectangle</button>
-          <button type="button" onClick={() => { updatePanel(contextMenu.pageId!, contextMenu.panelId!, { shapeType: 'ellipse' }); closeContextMenu(); }} className={itemClass}>Circle / Ellipse</button>
-          <button type="button" onClick={() => { updatePanel(contextMenu.pageId!, contextMenu.panelId!, { shapeType: 'halfCircle' }); closeContextMenu(); }} className={itemClass}>Half-circle</button>
-          <button type="button" onClick={() => { updatePanel(contextMenu.pageId!, contextMenu.panelId!, { shapeType: 'quarterCircle' }); closeContextMenu(); }} className={itemClass}>Quarter-circle</button>
-          <button type="button" onClick={() => { updatePanel(contextMenu.pageId!, contextMenu.panelId!, { shapeType: 'sector', centralAngle: 90 }); closeContextMenu(); }} className={itemClass}>Sector</button>
+          <button type="button" onClick={() => handlePanelShape('rect')} className={itemClass}>Rectangle</button>
+          <button type="button" onClick={() => handlePanelShape('ellipse')} className={itemClass}>Circle / Ellipse</button>
+          <button type="button" onClick={() => handlePanelShape('halfCircle')} className={itemClass}>Half-circle</button>
+          <button type="button" onClick={() => handlePanelShape('quarterCircle')} className={itemClass}>Quarter-circle</button>
+          <button type="button" onClick={() => handlePanelShape('sector')} className={itemClass}>Sector</button>
           <div className="my-1 border-t border-white/15" />
           <button type="button" onClick={handleDelete} className={itemClass}>
             <Trash2 size={12} /> Delete
