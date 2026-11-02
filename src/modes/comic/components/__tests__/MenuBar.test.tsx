@@ -71,4 +71,45 @@ describe('Advanced Studio MenuBar image commands', () => {
     fireEvent.click(screen.getByRole('button', { name: /Import image…/ }));
     expect(onImportImage).toHaveBeenCalledTimes(2);
   });
+
+  it('updates each selected sector on the page that owns it', () => {
+    useComicStore.setState({
+      pages: [
+        {
+          id: 'page-1',
+          panels: [{ id: 'sector-1', type: 'panel', shapeType: 'sector', x: 0, y: 0, width: 100, height: 100, centralAngle: 90 }],
+          balloons: [],
+          drawings: [],
+          overlays: [],
+          background: '#ffffff',
+          layerOrder: ['sector-1'],
+        },
+        {
+          id: 'page-2',
+          panels: [{ id: 'sector-2', type: 'panel', shapeType: 'sector', x: 0, y: 0, width: 100, height: 100, centralAngle: 90 }],
+          balloons: [],
+          drawings: [],
+          overlays: [],
+          background: '#ffffff',
+          layerOrder: ['sector-2'],
+        },
+      ],
+      currentPageId: 'page-1',
+      selectedElementIds: ['sector-1', 'sector-2'],
+    });
+    renderMenuBar();
+
+    fireEvent.mouseEnter(screen.getByRole('button', { name: 'Panel' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ 15°' }));
+
+    const [firstPage, secondPage] = useComicStore.getState().pages;
+    expect(firstPage?.panels[0]?.centralAngle).toBe(105);
+    expect(secondPage?.panels[0]?.centralAngle).toBe(105);
+
+    fireEvent.mouseEnter(screen.getByRole('button', { name: 'Objects' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Flip H' }));
+    const [flippedFirstPage, flippedSecondPage] = useComicStore.getState().pages;
+    expect(flippedFirstPage?.panels[0]?.flipX).toBe(true);
+    expect(flippedSecondPage?.panels[0]?.flipX).toBe(true);
+  });
 });

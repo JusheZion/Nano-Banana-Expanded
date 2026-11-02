@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { useOwnedTimeout } from '@/shared/hooks/useOwnedTimeout';
 
 export interface WriterMenuOption {
   id: string;
@@ -30,19 +31,12 @@ export const WriterSearchableMenu = memo(function WriterSearchableMenu({
   const [query, setQuery] = useState(selected?.label ?? '');
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blurTimer = useOwnedTimeout();
   const listboxId = useId();
 
   useEffect(() => {
     setQuery(selected?.label ?? '');
   }, [selected?.label]);
-
-  useEffect(
-    () => () => {
-      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
-    },
-    [],
-  );
 
   const filteredOptions = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -54,13 +48,13 @@ export const WriterSearchableMenu = memo(function WriterSearchableMenu({
 
   const pick = useCallback(
     (option: WriterMenuOption | null) => {
-      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+      blurTimer.clear();
       onChange(option?.id ?? null);
       setQuery(option?.label ?? '');
       setOpen(false);
       setActiveIndex(-1);
     },
-    [onChange],
+    [blurTimer, onChange],
   );
 
   return (
@@ -87,11 +81,11 @@ export const WriterSearchableMenu = memo(function WriterSearchableMenu({
           if (!event.target.value.trim()) onChange(null);
         }}
         onFocus={() => {
-          if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+          blurTimer.clear();
           setOpen(true);
         }}
         onBlur={() => {
-          blurTimerRef.current = setTimeout(() => {
+          blurTimer.schedule(() => {
             setOpen(false);
             setActiveIndex(-1);
             setQuery(selected?.label ?? '');

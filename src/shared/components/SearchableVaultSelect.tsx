@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { useOwnedTimeout } from '@/shared/hooks/useOwnedTimeout';
 
 const MAX_VISIBLE_OPTIONS = 200;
 
@@ -46,7 +47,7 @@ export function SearchableVaultSelect({
   const listboxId = `${baseId}-listbox`;
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const blurCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blurCloseTimer = useOwnedTimeout();
 
   const filtered = useMemo(() => {
     const q = value.trim().toLowerCase();
@@ -56,31 +57,21 @@ export function SearchableVaultSelect({
     return options.filter((o) => o.toLowerCase().includes(q)).slice(0, MAX_VISIBLE_OPTIONS);
   }, [options, value]);
 
-  const clearBlurTimer = useCallback(() => {
-    if (blurCloseTimer.current != null) {
-      clearTimeout(blurCloseTimer.current);
-      blurCloseTimer.current = null;
-    }
-  }, []);
-
   const scheduleClose = useCallback(() => {
-    clearBlurTimer();
-    blurCloseTimer.current = setTimeout(() => {
+    blurCloseTimer.schedule(() => {
       setOpen(false);
       setActiveIndex(-1);
     }, 180);
-  }, [clearBlurTimer]);
-
-  useEffect(() => () => clearBlurTimer(), [clearBlurTimer]);
+  }, [blurCloseTimer]);
 
   const pickOption = useCallback(
     (opt: string) => {
-      clearBlurTimer();
+      blurCloseTimer.clear();
       onChange(opt);
       setOpen(false);
       setActiveIndex(-1);
     },
-    [clearBlurTimer, onChange]
+    [blurCloseTimer, onChange]
   );
 
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -150,7 +141,7 @@ export function SearchableVaultSelect({
           setActiveIndex(-1);
         }}
         onFocus={() => {
-          clearBlurTimer();
+          blurCloseTimer.clear();
           setOpen(true);
         }}
         onBlur={scheduleClose}

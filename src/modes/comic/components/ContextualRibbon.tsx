@@ -234,6 +234,14 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
     }
   };
 
+  const handleSplitSelectedPanels = (
+    direction: 'horizontal' | 'vertical',
+    slant = 0,
+  ) => {
+    if (!currentPageId) return;
+    selectedPanels.forEach((panel) => splitPanel(currentPageId, panel.id, direction, slant));
+  };
+
   const SplitIconH = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="12" x2="21" y2="12" /></svg>;
   const SplitIconV = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="12" y1="3" x2="12" y2="21" /></svg>;
   const SplitIconSlantRow = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="16" x2="21" y2="8" /></svg>;
@@ -253,10 +261,10 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
           <RibbonButton label="Half" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2 A10 10 0 0 1 22 12 L2 12 A10 10 0 0 1 12 2 Z" /></svg>} onClick={() => handleAddPanel('halfCircle')} title="Add half-circle at cursor or center" />
           <RibbonButton label="Quarter" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 12 L22 12 A10 10 0 0 1 12 22 Z" /></svg>} onClick={() => handleAddPanel('quarterCircle')} title="Add quarter-circle at cursor or center" />
           <RibbonButton label="Sector" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 12 L22 12 A10 10 0 0 1 16 20 Z" /></svg>} onClick={() => handleAddPanel('sector')} title="Add sector at cursor or center" />
-          <RibbonButton label="Split H" icon={<SplitIconH />} onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, 'horizontal', 0))} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split horizontal' : 'Select a panel'} />
-          <RibbonButton label="Split V" icon={<SplitIconV />} onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, 'vertical', 0))} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split vertical' : 'Select a panel'} />
-          <RibbonButton label="Slant R" icon={<SplitIconSlantRow />} onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, 'horizontal', 40))} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split slant row' : 'Select a panel'} />
-          <RibbonButton label="Slant C" icon={<SplitIconSlantCol />} onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, 'vertical', 40))} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split slant column' : 'Select a panel'} />
+          <RibbonButton label="Split H" icon={<SplitIconH />} onClick={() => handleSplitSelectedPanels('horizontal')} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split horizontal' : 'Select a panel'} />
+          <RibbonButton label="Split V" icon={<SplitIconV />} onClick={() => handleSplitSelectedPanels('vertical')} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split vertical' : 'Select a panel'} />
+          <RibbonButton label="Slant R" icon={<SplitIconSlantRow />} onClick={() => handleSplitSelectedPanels('horizontal', 40)} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split slant row' : 'Select a panel'} />
+          <RibbonButton label="Slant C" icon={<SplitIconSlantCol />} onClick={() => handleSplitSelectedPanels('vertical', 40)} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split slant column' : 'Select a panel'} />
           <RibbonButton label="Knife" icon={<Scissors size={16} />} active={isKnifeMode} onClick={() => setKnifeMode(!isKnifeMode)} title={isKnifeMode ? 'Exit Knife' : 'Knife (split by line)'} />
           <RibbonButton label="Draw" icon={<Pencil size={16} />} active={isDrawingMode} onClick={() => toggleDrawingMode(!isDrawingMode)} title={isDrawingMode ? 'Exit Draw' : 'Draw'} />
           <RibbonButton label="Insert Image" icon={<ImagePlus size={16} />} onClick={handleInsertImage} title="Insert image into selected panel(s) or add new panel with image" />
@@ -434,8 +442,8 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
             <span className="text-[10px] font-bold uppercase tracking-wider opacity-80 text-center w-full" style={{ color: TEXT_ON_BLUE }}>Panels</span>
             <div className="flex items-center gap-1.5">
               <RibbonButton label="Add Square" icon={<Square size={16} />} onClick={() => handleAddPanel('polygon')} title="Add rectangle panel" />
-              <RibbonButton label="Split H" icon={<SplitIconH />} onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, 'horizontal', 0))} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split horizontal' : 'Select a panel'} />
-              <RibbonButton label="Split V" icon={<SplitIconV />} onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, 'vertical', 0))} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split vertical' : 'Select a panel'} />
+              <RibbonButton label="Split H" icon={<SplitIconH />} onClick={() => handleSplitSelectedPanels('horizontal')} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split horizontal' : 'Select a panel'} />
+              <RibbonButton label="Split V" icon={<SplitIconV />} onClick={() => handleSplitSelectedPanels('vertical')} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split vertical' : 'Select a panel'} />
             </div>
           </div>
           {RIBBON_DIVIDER}

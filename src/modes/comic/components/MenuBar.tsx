@@ -101,7 +101,15 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
   const isSelectionOneGroup = !!(groupOfFirst && groupOfFirst.length >= 2 && selectedElementIds.length === 1);
   const selectedPanelEntries = pages.flatMap(p => p.panels.filter(panel => selectedElementIds.includes(panel.id)).map(panel => ({ pageId: p.id, panel })));
   const selectedPanels = selectedPanelEntries.map(x => x.panel);
-  const effectivePageIdForSelection = selectedPanelEntries[0]?.pageId ?? currentPageId;
+  const selectedElementEntries = pages.flatMap((page) => [
+    ...page.panels,
+    ...page.balloons,
+    ...page.drawings,
+    ...(page.overlays ?? []),
+  ].filter((element) => selectedElementIds.includes(element.id)).map((element) => ({
+    pageId: page.id,
+    elementId: element.id,
+  })));
 
   // Close dropdown and clear active menu when clicking outside (hover already closes on leave)
   useCloseOnOutside(barRef, openMenu !== null, () => {
@@ -208,8 +216,8 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
   };
 
   const handleSetPanelShape = (shapeType: 'rect' | 'ellipse' | 'halfCircle' | 'quarterCircle' | 'sector') => {
-    if (!effectivePageIdForSelection || selectedPanels.length === 0) return;
-    selectedPanels.forEach(p => updatePanel(effectivePageIdForSelection, p.id, {
+    if (selectedPanelEntries.length === 0) return;
+    selectedPanelEntries.forEach(({ pageId, panel }) => updatePanel(pageId, panel.id, {
       shapeType,
       ...(shapeType === 'sector' && { centralAngle: 90 }),
     }));
@@ -250,8 +258,17 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
   };
 
   const handleSplit = (dir: 'horizontal' | 'vertical', slant?: number) => {
-    if (!effectivePageIdForSelection || selectedPanels.length === 0) return;
-    selectedPanels.forEach(p => splitPanel(effectivePageIdForSelection, p.id, dir, slant));
+    if (selectedPanelEntries.length === 0) return;
+    selectedPanelEntries.forEach(({ pageId, panel }) => splitPanel(pageId, panel.id, dir, slant));
+    close();
+  };
+
+  const handleAdjustSectorAngle = (delta: number) => {
+    selectedPanelEntries.forEach(({ pageId, panel }) => {
+      updatePanel(pageId, panel.id, {
+        centralAngle: Math.max(1, Math.min(360, (panel.centralAngle ?? 90) + delta)),
+      });
+    });
     close();
   };
 
@@ -374,9 +391,9 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
               <div className="my-1 border-t border-white/15" />
               <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Sector angle</div>
               <div className="flex items-center gap-1 px-3 py-1">
-                <button type="button" onClick={() => { selectedPanels.forEach(p => updatePanel(effectivePageIdForSelection!, p.id, { centralAngle: Math.max(1, (p.centralAngle ?? 90) - 15) })); close(); }} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}>- 15°</button>
+                <button type="button" onClick={() => handleAdjustSectorAngle(-15)} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}>- 15°</button>
                 <span className="text-[10px] opacity-80" style={dropdownHeadingStyle}>{selectedPanels[0].centralAngle ?? 90}°</span>
-                <button type="button" onClick={() => { selectedPanels.forEach(p => updatePanel(effectivePageIdForSelection!, p.id, { centralAngle: Math.min(360, (p.centralAngle ?? 90) + 15) })); close(); }} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}>+ 15°</button>
+                <button type="button" onClick={() => handleAdjustSectorAngle(15)} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}>+ 15°</button>
               </div>
             </>
           )}
@@ -420,14 +437,14 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
         <div className={`${dropdownPanelClass} min-w-[260px] max-h-[80vh] overflow-y-auto`} style={dropdownPanelStyle}>
           <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Shape & transform</div>
           <button type="button" onClick={() => { props.onOpenFormatDialog?.('fillLine'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><BoxSelect size={12} /> Shape (Rect / Ellipse)</button>
-          <button type="button" disabled={!effectivePageIdForSelection || !selectedPanels.length} onClick={() => { if (effectivePageIdForSelection) selectedPanels.forEach(p => splitPanel(effectivePageIdForSelection, p.id, 'horizontal', 0)); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Scissors size={12} /> Split panel</button>
+          <button type="button" disabled={!selectedPanels.length} onClick={() => { handleSplit('horizontal', 0); props.onActiveMenuChange('objects'); }} className={dropdownItemClass} style={dropdownItemStyle}><Scissors size={12} /> Split panel</button>
           <div className="flex items-center gap-1 px-3 py-1">
-            <button type="button" disabled={!effectivePageIdForSelection || !selectedElementIds.length} onClick={() => { if (effectivePageIdForSelection) selectedElementIds.forEach(id => toggleFlip(effectivePageIdForSelection, id, 'horizontal')); }} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}><ArrowLeftRight size={12} /> Flip H</button>
-            <button type="button" disabled={!effectivePageIdForSelection || !selectedElementIds.length} onClick={() => { if (effectivePageIdForSelection) selectedElementIds.forEach(id => toggleFlip(effectivePageIdForSelection, id, 'vertical')); }} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}><ArrowLeftRight size={12} className="rotate-90" /> Flip V</button>
+            <button type="button" disabled={!selectedElementEntries.length} onClick={() => selectedElementEntries.forEach(({ pageId, elementId }) => toggleFlip(pageId, elementId, 'horizontal'))} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}><ArrowLeftRight size={12} /> Flip H</button>
+            <button type="button" disabled={!selectedElementEntries.length} onClick={() => selectedElementEntries.forEach(({ pageId, elementId }) => toggleFlip(pageId, elementId, 'vertical'))} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}><ArrowLeftRight size={12} className="rotate-90" /> Flip V</button>
           </div>
           <div className="flex items-center gap-1 px-3 py-1">
-            <button type="button" disabled={!effectivePageIdForSelection || !selectedElementIds.length} onClick={() => { if (effectivePageIdForSelection) selectedElementIds.forEach(id => bringToFront(effectivePageIdForSelection, id)); }} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}>Bring to front</button>
-            <button type="button" disabled={!effectivePageIdForSelection || !selectedElementIds.length} onClick={() => { if (effectivePageIdForSelection) selectedElementIds.forEach(id => sendToBack(effectivePageIdForSelection, id)); }} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}>Send to back</button>
+            <button type="button" disabled={!selectedElementEntries.length} onClick={() => selectedElementEntries.forEach(({ pageId, elementId }) => bringToFront(pageId, elementId))} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}>Bring to front</button>
+            <button type="button" disabled={!selectedElementEntries.length} onClick={() => selectedElementEntries.forEach(({ pageId, elementId }) => sendToBack(pageId, elementId))} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}>Send to back</button>
           </div>
           <button type="button" onClick={() => { currentPageId && createGroup(currentPageId, selectedElementIds); props.onActiveMenuChange('objects'); close(); }} disabled={!currentPageId || selectedElementIds.length < 2} className={dropdownItemClass} style={dropdownItemStyle}><BoxSelect size={12} /> Group</button>
           <button type="button" onClick={() => { currentPageId && selectedElementIds[0] && ungroup(currentPageId, selectedElementIds[0]); props.onActiveMenuChange('objects'); close(); }} disabled={!currentPageId || !selectedElementIds.length || !isSelectionOneGroup} className={dropdownItemClass} style={dropdownItemStyle}><BoxSelect size={12} /> Ungroup</button>

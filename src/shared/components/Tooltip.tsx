@@ -5,6 +5,7 @@ import {
     CHARACTER_STUDIO_EMERALD_TEXT,
     ASSET_STUDIO_AMETHYST_TEXT,
 } from '@/shared/theme/Phase12DesignTokens';
+import { useOwnedTimeout } from '@/shared/hooks/useOwnedTimeout';
 
 export type StudioTooltipVariant = 'character' | 'asset';
 
@@ -102,8 +103,8 @@ export function PinnedHelpTooltip({
 }) {
     const [pinned, setPinned] = React.useState(false);
     const [hover, setHover] = React.useState(false);
-    const hoverTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-    const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const hoverTimer = useOwnedTimeout();
+    const leaveTimer = useOwnedTimeout();
     const wrapRef = React.useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
@@ -127,22 +128,16 @@ export function PinnedHelpTooltip({
     }, [pinned]);
 
     const startHover = () => {
-        if (leaveTimerRef.current) {
-            clearTimeout(leaveTimerRef.current);
-            leaveTimerRef.current = null;
-        }
-        hoverTimerRef.current = setTimeout(() => setHover(true), 220);
+        leaveTimer.clear();
+        hoverTimer.schedule(() => setHover(true), 220);
     };
     const endHover = () => {
-        if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+        hoverTimer.clear();
         if (pinned) return;
-        leaveTimerRef.current = setTimeout(() => setHover(false), 280);
+        leaveTimer.schedule(() => setHover(false), 280);
     };
     const cancelLeave = () => {
-        if (leaveTimerRef.current) {
-            clearTimeout(leaveTimerRef.current);
-            leaveTimerRef.current = null;
-        }
+        leaveTimer.clear();
         if (!pinned) setHover(true);
     };
 

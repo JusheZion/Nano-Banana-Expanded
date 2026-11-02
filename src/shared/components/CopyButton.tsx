@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useTheme } from '@/shared/context/ThemeContext';
+import { useOwnedTimeout } from '@/shared/hooks/useOwnedTimeout';
 
 interface CopyButtonProps {
     text: string;
@@ -10,28 +11,18 @@ interface CopyButtonProps {
 export const CopyButton: React.FC<CopyButtonProps> = ({ text, labelStyle }) => {
     const [copied, setCopied] = useState(false);
     const { activeTheme } = useTheme();
-    // The reset timer used to be a bare setTimeout: it leaked on unmount, and rapid clicks stacked
-    // timers so an earlier one could clear the "Copied!" flash from a later click.
-    const resetTimerRef = useRef<number | null>(null);
-
-    useEffect(() => () => {
-        if (resetTimerRef.current !== null) window.clearTimeout(resetTimerRef.current);
-    }, []);
+    const resetTimer = useOwnedTimeout();
 
     const handleCopy = useCallback(async () => {
         if (!text) return;
         try {
             await navigator.clipboard.writeText(text);
             setCopied(true);
-            if (resetTimerRef.current !== null) window.clearTimeout(resetTimerRef.current);
-            resetTimerRef.current = window.setTimeout(() => {
-                resetTimerRef.current = null;
-                setCopied(false);
-            }, 2000);
+            resetTimer.schedule(() => setCopied(false), 2000);
         } catch (err) {
             console.error('Failed to copy text: ', err);
         }
-    }, [text]);
+    }, [resetTimer, text]);
 
     const flashColor = activeTheme === 'crimson' ? '#893741' : activeTheme === 'teal' ? '#37615D' : '#5F368E';
 

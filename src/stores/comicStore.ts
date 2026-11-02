@@ -398,7 +398,8 @@ function applyHistorySnapshot(snap: UndoSnapshot): void {
 export function comicUndo(): void {
     if (past.length === 0) return;
     const current = undoSnapshotSlice(useComicStore.getState());
-    const snap = past.pop()!;
+    const snap = past.pop();
+    if (!snap) return;
     future.push(current);
     applyHistorySnapshot(snap);
 }
@@ -406,7 +407,8 @@ export function comicUndo(): void {
 export function comicRedo(): void {
     if (future.length === 0) return;
     const current = undoSnapshotSlice(useComicStore.getState());
-    const snap = future.pop()!;
+    const snap = future.pop();
+    if (!snap) return;
     past.push(current);
     applyHistorySnapshot(snap);
 }

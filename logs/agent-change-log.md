@@ -347,6 +347,49 @@
   - Playwright diagnostic artifacts were removed after browser QA.
   - No deployment, production-data mutation, live Supabase write, dependency update, or credential access was performed.
 
+### 2026-11-01 19:12 EST - Refactor: Own UI timers and cross-page comic actions
+
+- Job ID: 20261101-000002-arcs-timer-page-ownership
+- Workflow: Heavy
+- Workflow version: lean-routing-2026-08-03
+- Model: GPT-5
+- Started: 2026-11-01 00:00 EDT
+- Finished: 2026-11-01 19:12 EST
+- Elapsed: unavailable - the host clock changed during test execution and Vitest reported non-wall-clock durations
+- Feature or system area: shared React timer lifecycle and Advanced Comic multi-page selection actions
+- Initial outcome: partial - regression tests confirmed two unowned UI timers and cross-page actions routed through the wrong page.
+- Outcome: partial - product fixes and static/build gates pass; the monolithic full-suite runner remains unstable on this host.
+- Rerouted: none
+- Failed fix attempts: 1
+- Bugs:
+  - Pre-existing: 3
+  - Introduced and caught: 1
+  - Escaped regression: 0
+- Release result: needs review - implementation gates pass, but a clean monolithic Vitest result is outstanding.
+- Related job ID: 20261024-235531-arcs-story-canon-ownership
+- Files changed:
+  - Shared timeout hook and regressions, six timer consumers, Advanced Comic owner-aware menu actions and regression, null-safety cleanups, `walkthrough.md`, and this log.
+- Steps taken:
+  1. Re-established TypeScript and lint baselines and audited executable `any`, null assertions, React effects, hook dependencies, Vite environment declarations, and public asset routing.
+  2. Reproduced tooltip-dismiss and Writer long-press timers surviving unmount, then added lifecycle regressions before implementing the shared timer owner.
+  3. Reproduced sector-angle and flip actions skipping selected panels on later pages, then retained the owning page with every selected panel and element action.
+  4. Migrated duplicated timer refs, narrowed avoidable assertions, ran focused and broad verification, completed the DOX pass, and preserved unrelated worktree changes.
+- Tests run:
+  - Pre-fix timer and cross-page regressions - failed as expected, confirming all three product defects.
+  - Focused verification - passed, 7 files / 56 tests.
+  - Final changed-surface verification - passed, 6 files / 13 tests.
+  - `npx tsc -b --pretty false` - passed.
+  - `npm run lint` - passed, 0 errors / 0 warnings.
+  - Broad Vitest shard - 196 files / 1,669 tests passed; one unchanged Image Lab timeout passed separately, 1 file / 30 tests.
+  - Single-process full Vitest retries - inconclusive: unrelated timeouts and worker startup failures moved between files; the last one-worker run remained stuck for more than two hours and was stopped.
+  - `npm run build` - passed, 2,701 modules transformed.
+- Notes:
+  - The three pre-existing defects were the pinned-help timer surviving unmount, the Writer long-press timer surviving unmount, and cross-page comic actions using the first selected page for every object.
+  - The introduced-and-caught issue was initially typing the browser timeout handle with Node's `ReturnType<typeof setTimeout>`; TypeScript rejected it and the hook now uses the browser `number` handle.
+  - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remain user-owned and uncommitted.
+  - The DOX pass left AGENTS files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
+  - No deployment, production-data mutation, live Supabase write, dependency update, or credential access was performed.
+
 ### 2026-10-11 00:09 EDT - Refactor: Own Prompt Library account refreshes
 
 - Job ID: 20261011-000125-arcs-weekly-prompt-library

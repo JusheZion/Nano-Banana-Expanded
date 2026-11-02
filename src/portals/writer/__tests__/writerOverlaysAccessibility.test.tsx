@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WriterContextMenu } from '@/portals/writer/WriterContextMenu';
 import { WriterHelpModal } from '@/portals/writer/WriterHelpModal';
 
@@ -39,6 +39,11 @@ describe('WriterHelpModal accessibility', () => {
 });
 
 describe('WriterContextMenu accessibility', () => {
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
   it('autofocuses and navigates enabled items, then restores focus on Escape', async () => {
     render(
       <WriterContextMenu
@@ -74,5 +79,24 @@ describe('WriterContextMenu accessibility', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();
     expect(document.activeElement).toBe(target);
+  });
+
+  it('cancels a pending touch long-press when the menu subtree unmounts', () => {
+    vi.useFakeTimers();
+    const { unmount } = render(
+      <WriterContextMenu items={[{ label: 'Open', onClick: vi.fn() }]}>
+        <button type="button">Touch target</button>
+      </WriterContextMenu>,
+    );
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Touch target' }), {
+      pointerType: 'touch',
+      clientX: 20,
+      clientY: 30,
+    });
+    expect(vi.getTimerCount()).toBe(1);
+
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

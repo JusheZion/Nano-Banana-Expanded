@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useOwnedTimeout } from '@/shared/hooks/useOwnedTimeout';
 
 export type WriterContextMenuItem = {
   label: string;
@@ -19,14 +20,7 @@ export const WriterContextMenu: React.FC<Props> = ({ children, items }) => {
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearLongPress = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  }, []);
+  const longPressTimer = useOwnedTimeout();
 
   const openAt = useCallback(
     (x: number, y: number, opener?: HTMLElement | null) => {
@@ -54,20 +48,18 @@ export const WriterContextMenu: React.FC<Props> = ({ children, items }) => {
       if (e.pointerType !== 'touch') return;
       const usable = items.some((i) => !i.disabled);
       if (!usable) return;
-      clearLongPress();
       const startX = e.clientX;
       const startY = e.clientY;
-      longPressTimer.current = setTimeout(() => {
-        longPressTimer.current = null;
+      longPressTimer.schedule(() => {
         openAt(startX, startY);
       }, LONG_PRESS_MS);
     },
-    [items, openAt, clearLongPress],
+    [items, longPressTimer, openAt],
   );
 
   const endLongPressTrack = useCallback(() => {
-    clearLongPress();
-  }, [clearLongPress]);
+    longPressTimer.clear();
+  }, [longPressTimer]);
 
   useLayoutEffect(() => {
     if (!open || !menuRef.current) return;

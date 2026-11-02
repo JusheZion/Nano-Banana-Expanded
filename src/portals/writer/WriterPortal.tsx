@@ -8081,6 +8081,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     })),
   ];
 
+  const writerRecordUndo = writerRecordStatus?.undo ?? null;
+
   return (
     <React.Suspense fallback={<div className="flex min-h-[40vh] items-center justify-center text-black/55">Loading writing tool…</div>}>
     <div
@@ -8209,11 +8211,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           className="flex flex-shrink-0 items-center gap-3 border-b border-emerald-700/25 bg-emerald-50/95 px-4 py-2 text-xs font-semibold text-emerald-950"
         >
           <p className="min-w-0 flex-1">{writerRecordStatus.message}</p>
-          {writerRecordStatus.undo ? (
+          {writerRecordUndo ? (
             <button
               type="button"
               disabled={Boolean(restoreRecordBusyId)}
-              onClick={() => void restoreWriterRecord(writerRecordStatus.undo!)}
+              onClick={() => void restoreWriterRecord(writerRecordUndo)}
               className="min-h-11 rounded-md border border-emerald-900/25 bg-white px-3 text-[10px] font-black uppercase tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 disabled:opacity-40 sm:min-h-9"
             >
               {restoreRecordBusyId ? 'Restoring…' : 'Undo'}

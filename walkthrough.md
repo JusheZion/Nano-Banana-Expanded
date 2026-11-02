@@ -17233,6 +17233,96 @@ Modified:
 
 - Continue the scheduled weekly audit from this verified baseline.
 
+## Weekly timer ownership and cross-page comic actions audit - 2026-11-01
+
+### What changed
+
+- Added `useOwnedTimeout`, a shared React hook that guarantees one replaceable
+  timeout, clears it on unmount, and prevents delayed callbacks from outliving
+  their component.
+- Migrated six tooltip, copy-status, vault-select, Writer menu, and Codex status
+  consumers from duplicated timer refs to the shared lifecycle boundary.
+- Fixed `PinnedHelpTooltip` dismiss timers and Writer context-menu long-press
+  timers remaining live after their UI unmounted.
+- Fixed Advanced Comic multi-selection actions using the first selected page
+  for every selected object. Panel shape, split, sector angle, flip, and stacking
+  actions now retain and use each element's owning page.
+- Replaced avoidable non-null assertions in comic undo/redo, Writer record undo,
+  and contextual panel splitting with explicit narrowing.
+
+### Files touched
+
+- `src/shared/hooks/useOwnedTimeout.ts`
+- `src/shared/hooks/__tests__/useOwnedTimeout.test.tsx`
+- `src/shared/components/Tooltip.tsx`
+- `src/shared/components/__tests__/PinnedHelpTooltip.test.tsx`
+- `src/shared/components/CopyButton.tsx`
+- `src/shared/components/SearchableVaultSelect.tsx`
+- `src/portals/writer/WriterContextMenu.tsx`
+- `src/portals/writer/WriterSearchableMenu.tsx`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/__tests__/writerOverlaysAccessibility.test.tsx`
+- `src/modes/codex/hooks/useTransientStatus.ts`
+- `src/modes/comic/components/MenuBar.tsx`
+- `src/modes/comic/components/ContextualRibbon.tsx`
+- `src/modes/comic/components/__tests__/MenuBar.test.tsx`
+- `src/stores/comicStore.ts`
+- `walkthrough.md`
+- `logs/agent-change-log.md`
+
+### Implementation notes
+
+- The timer hook is a deep shared module with a small stable interface:
+  `schedule` and `clear`. Scheduling replaces the prior timer,
+  while unmount cleanup invalidates the owned callback.
+- Comic menu selection is represented as owner-aware entries rather than a
+  flat list plus one inferred page ID. This removes the invalid assumption that
+  a multi-page selection belongs to the first matching page.
+- The Vite environment declarations, public asset routing, executable
+  production `any` usage, hook dependencies, and remaining null assertions were
+  audited; no additional defect requiring a change was found.
+- The DOX pass left `AGENTS.md` unchanged because this refactor did not change a
+  durable product contract, ownership boundary, permission, workflow, or child
+  index.
+
+### Verification
+
+- Regression-first timer and comic ownership tests failed before the fixes and
+  passed afterward.
+- Focused verification: 7 files / 56 tests passed.
+- Final changed-surface verification: 6 files / 13 tests passed.
+- `npx tsc -b --pretty false` - PASS.
+- `npm run lint` - PASS, 0 errors and 0 ESLint warnings.
+- `npm run build` - PASS, 2,701 modules transformed.
+- Broad Vitest shard: 196 files / 1,669 tests passed; the remaining unchanged
+  Image Lab test passed separately (1 file / 30 tests).
+
+### Outstanding issues
+
+- The single-process full Vitest command did not produce a trustworthy terminal
+  result on this host. Unrelated tests alternately timed out or workers failed
+  to start, reported durations greatly exceeded actual wall time, and the final
+  one-worker run remained stuck for more than two hours. Focused regressions,
+  broad shards, TypeScript, lint, and build are green, but a clean monolithic
+  full-suite result remains outstanding.
+
+### Risks or caveats
+
+- Browserslist reports that `caniuse-lite` is eight months old. This is a
+  non-blocking maintenance notice and was not changed.
+- No deployment, production-data mutation, live Supabase write, dependency
+  update, or credential access was performed.
+
+### Operator follow-up
+
+- Re-run `npm run test -- --run` on a stable host or after restarting the local
+  test environment to obtain the missing monolithic suite signal.
+
+### Next steps
+
+- Continue the scheduled weekly audit from this owner-aware timer and comic
+  selection baseline.
+
 ## Weekly ARCS vault option concurrency refactor - 2026-09-27
 
 ### What changed
