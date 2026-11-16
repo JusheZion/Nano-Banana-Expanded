@@ -62,6 +62,33 @@ function fixture(): PacingRevisionSet {
 }
 
 describe('WriterPacingRevisionWorkspace', () => {
+  it('discards set-scoped edit state when a different revision set replaces it', async () => {
+    const firstSet = fixture();
+    const secondSet = fixture();
+    const secondProposal = secondSet.items[0]?.changes.find((change) => change.layer === 'outline');
+    if (!secondProposal || typeof secondProposal.ai_proposal !== 'object' || !secondProposal.ai_proposal) {
+      throw new Error('Fixture is missing its outline proposal.');
+    }
+    secondProposal.ai_proposal = { proposed_beat: { summary: 'A different revision opens quietly.' } };
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <WriterPacingRevisionWorkspace revisionSet={firstSet} onChange={onChange} onApply={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit suggestion' }));
+    fireEvent.change(screen.getByLabelText('Edit suggested change'), {
+      target: { value: 'Stale draft from the first revision.' },
+    });
+
+    rerender(
+      <WriterPacingRevisionWorkspace revisionSet={secondSet} onChange={onChange} onApply={vi.fn()} />,
+    );
+
+    await waitFor(() => expect(screen.queryByLabelText('Edit suggested change')).toBeNull());
+    expect(screen.getByText('A different revision opens quietly.')).toBeTruthy();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it('shows separate current and proposed panels without raw JSON', () => {
     render(<WriterPacingRevisionWorkspace revisionSet={fixture()} onChange={vi.fn()} onApply={vi.fn()} />);
     expect(screen.getByText('Current live')).toBeTruthy();

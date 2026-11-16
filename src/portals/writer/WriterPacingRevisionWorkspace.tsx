@@ -128,7 +128,11 @@ function editableValue(change: PacingRevisionChange): string {
   return readableValue(change.layer, value);
 }
 
-export function WriterPacingRevisionWorkspace({
+export function WriterPacingRevisionWorkspace(props: Props) {
+  return <WriterPacingRevisionWorkspaceContent key={props.revisionSet.id} {...props} />;
+}
+
+function WriterPacingRevisionWorkspaceContent({
   revisionSet,
   busy = false,
   applying = false,

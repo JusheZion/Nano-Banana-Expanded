@@ -19,6 +19,22 @@ type StoredOperation = {
   emotional_turn?: string;
 };
 
+const OPERATION_TYPES = ['edit', 'move', 'combine', 'add'] as const;
+
+function readRequiredString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function readSourceBeatIds(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const ids = value.map(readRequiredString);
+  return ids.every((id): id is string => id !== null) ? ids : null;
+}
+
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -51,16 +67,34 @@ function readCandidate(change: PacingRevisionChange): {
   proposedBeat: OutlineBeat | null;
 } {
   const candidate = asRecord(effectivePacingRevisionCandidate(change));
-  const operation = asRecord(candidate.operation) as Partial<StoredOperation>;
+  const stored = asRecord(candidate.operation);
+  const operationId = readRequiredString(stored.operation_id);
+  const operationType = OPERATION_TYPES.find((type) => type === stored.operation);
+  const sourceBeatIds = readSourceBeatIds(stored.source_beat_ids);
+  const anchorSourceBeatId = readOptionalString(stored.anchor_source_beat_id);
+  const scene = readOptionalString(stored.scene);
+  const summary = readOptionalString(stored.summary);
+  const emotionalTurn = readOptionalString(stored.emotional_turn);
   if (
-    typeof operation.operation_id !== 'string'
-    || !['edit', 'move', 'combine', 'add'].includes(String(operation.operation))
-    || !Array.isArray(operation.source_beat_ids)
+    !operationId
+    || !operationType
+    || sourceBeatIds === null
   ) {
     throw new Error(`Outline change ${change.id} is missing its deterministic operation.`);
   }
   return {
-    operation: operation as StoredOperation,
+    operation: {
+      operation_id: operationId,
+      operation: operationType,
+      source_beat_ids: sourceBeatIds,
+      ...(anchorSourceBeatId === undefined ? {} : { anchor_source_beat_id: anchorSourceBeatId }),
+      ...(stored.placement === 'before' || stored.placement === 'after'
+        ? { placement: stored.placement }
+        : {}),
+      ...(scene === undefined ? {} : { scene }),
+      ...(summary === undefined ? {} : { summary }),
+      ...(emotionalTurn === undefined ? {} : { emotional_turn: emotionalTurn }),
+    },
     proposedBeat: readBeat(candidate.proposed_beat),
   };
 }
@@ -87,16 +121,34 @@ export async function buildPacingRevisionOutlineFromApprovedChanges(args: {
       beat: rawBeat,
     };
   }));
+  const operationIds = new Set<string>();
 
   for (const change of args.approvedOutlineChanges) {
     const { operation, proposedBeat } = readCandidate(change);
+    if (operationIds.has(operation.operation_id)) {
+      throw new Error(`Duplicate operation ${operation.operation_id}.`);
+    }
+    operationIds.add(operation.operation_id);
+    if (new Set(operation.source_beat_ids).size !== operation.source_beat_ids.length) {
+      throw new Error(`Operation ${operation.operation_id} contains a duplicate source beat.`);
+    }
+    if (
+      operation.anchor_source_beat_id
+      && operation.source_beat_ids.includes(operation.anchor_source_beat_id)
+    ) {
+      throw new Error(`Operation ${operation.operation_id} cannot anchor to its own source beat.`);
+    }
     const sourceIndexes = operation.source_beat_ids
-      .map((id) => working.findIndex((entry) => entry.id === id))
-      .filter((index) => index >= 0);
+      .map((id) => working.findIndex((entry) => entry.id === id));
+    if (sourceIndexes.some((index) => index < 0)) {
+      throw new Error(`Operation ${operation.operation_id} references an unknown source beat.`);
+    }
     const proposal = proposedBeat ?? readBeat(operation);
     if (operation.operation === 'edit') {
       if (sourceIndexes.length !== 1 || !proposal) throw new Error(`Invalid edit ${operation.operation_id}.`);
-      working[sourceIndexes[0]!] = { id: operation.operation_id, beat: proposal };
+      const sourceIndex = sourceIndexes[0];
+      if (sourceIndex === undefined) throw new Error(`Invalid edit ${operation.operation_id}.`);
+      working[sourceIndex] = { id: operation.operation_id, beat: proposal };
       continue;
     }
     if (operation.operation === 'combine') {
@@ -111,7 +163,7 @@ export async function buildPacingRevisionOutlineFromApprovedChanges(args: {
       : -1;
     if (anchorIndex < 0 || !operation.placement) throw new Error(`Invalid anchor for ${operation.operation_id}.`);
     if (operation.operation === 'add') {
-      if (!proposal) throw new Error(`Invalid add ${operation.operation_id}.`);
+      if (sourceIndexes.length !== 0 || !proposal) throw new Error(`Invalid add ${operation.operation_id}.`);
       working.splice(anchorIndex + (operation.placement === 'after' ? 1 : 0), 0, {
         id: operation.operation_id,
         beat: proposal,
@@ -119,9 +171,13 @@ export async function buildPacingRevisionOutlineFromApprovedChanges(args: {
       continue;
     }
     if (sourceIndexes.length !== 1) throw new Error(`Invalid move ${operation.operation_id}.`);
-    const [moved] = working.splice(sourceIndexes[0]!, 1);
+    const sourceIndex = sourceIndexes[0];
+    if (sourceIndex === undefined) throw new Error(`Invalid move ${operation.operation_id}.`);
+    const [moved] = working.splice(sourceIndex, 1);
+    if (!moved) throw new Error(`Invalid move ${operation.operation_id}.`);
     const refreshedAnchor = working.findIndex((entry) => entry.id === operation.anchor_source_beat_id);
-    working.splice(refreshedAnchor + (operation.placement === 'after' ? 1 : 0), 0, moved!);
+    if (refreshedAnchor < 0) throw new Error(`Invalid anchor for ${operation.operation_id}.`);
+    working.splice(refreshedAnchor + (operation.placement === 'after' ? 1 : 0), 0, moved);
   }
 
   return {

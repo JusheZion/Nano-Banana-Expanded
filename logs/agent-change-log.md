@@ -347,6 +347,52 @@
   - Playwright diagnostic artifacts were removed after browser QA.
   - No deployment, production-data mutation, live Supabase write, dependency update, or credential access was performed.
 
+### 2026-11-16 08:56 EST - Refactor: Guard pacing operations and revision identity
+
+- Job ID: 20261116-084906-arcs-pacing-guards
+- Workflow: Heavy
+- Workflow version: lean-routing-2026-08-03
+- Model: GPT-5
+- Started: 2026-11-16 08:49 EST
+- Finished: 2026-11-16 08:56 EST
+- Elapsed: 7m
+- Feature or system area: Pacing Revision deterministic outline apply and workspace state ownership
+- Initial outcome: partial - regression tests reproduced silent malformed-operation handling and stale edit state crossing revision-set identities.
+- Outcome: success
+- Rerouted: none
+- Failed fix attempts: 0
+- Bugs:
+  - Pre-existing: 4
+  - Introduced and caught: 0
+  - Escaped regression: 0
+- Release result: success
+- Related job ID: 20261101-000002-arcs-timer-page-ownership
+- Files changed:
+  - `src/portals/writer/writerPacingRevisionOutline.ts`
+  - `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+  - `src/portals/writer/__tests__/writerPacingRevisionOutline.test.ts`
+  - `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+  - `walkthrough.md`
+- Steps taken:
+  1. Re-established passing TypeScript and lint baselines and audited executable `any`, null assertions, React lifecycle, hook dependencies, Vite environment declarations, and public asset routing.
+  2. Reproduced duplicate and unknown combine sources deleting or partially combining the wrong outline beats, plus self-anchored moves silently succeeding.
+  3. Replaced the persisted-operation cast with strict parsing and complete source, anchor, operation-ID, and operation-shape validation at the client apply boundary.
+  4. Reproduced a stale edit draft surviving a replacement revision set and isolated all workspace-local state by `revisionSet.id` through a keyed stateful content boundary.
+  5. Ran focused and complete gates, completed the DOX pass, and preserved unrelated worktree changes.
+- Tests run:
+  - Pre-fix `writerPacingRevisionOutline.test.ts` - failed as expected, 3 of 3 regressions reproduced.
+  - Pre-fix `WriterPacingRevisionWorkspace.test.tsx` - failed as expected, 1 of 27 regressions reproduced.
+  - Focused post-fix verification - passed, 3 files / 72 tests.
+  - `npx tsc -b --pretty false` - passed.
+  - `npm run lint` - passed, 0 errors / 0 warnings.
+  - `npm run test -- --run --pool=threads --maxWorkers=1 --reporter=dot` - passed, 198 files / 1,674 tests.
+  - `npm run build` - passed, 2,701 modules transformed.
+- Notes:
+  - The four pre-existing defects were duplicate combine sources deleting an unrelated beat, unknown combine sources being silently ignored, self-anchored moves being silently accepted, and stale edit state crossing into a replacement revision set.
+  - `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and both `.superpowers/brainstorm/` folders remain user-owned and uncommitted.
+  - The DOX pass left AGENTS files unchanged because no durable contract, ownership boundary, permission, workflow, or child index changed.
+  - No deployment, production-data mutation, live Supabase write, dependency update, or credential access was performed.
+
 ### 2026-11-01 19:12 EST - Refactor: Own UI timers and cross-page comic actions
 
 - Job ID: 20261101-000002-arcs-timer-page-ownership

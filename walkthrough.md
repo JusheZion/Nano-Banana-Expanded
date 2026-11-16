@@ -17233,6 +17233,80 @@ Modified:
 
 - Continue the scheduled weekly audit from this verified baseline.
 
+## Weekly pacing revision integrity and workspace identity audit - 2026-11-16
+
+### What changed
+
+- Hardened the deterministic Pacing Revision outline builder so persisted
+  operations are parsed from `unknown` into a strict local interface before
+  any official outline is assembled.
+- Rejected duplicate operation IDs, duplicate source-beat IDs, unknown source
+  beats, self-anchored operations, invalid add sources, and anchors that vanish
+  before a move is applied.
+- Prevented malformed combine operations from deleting unrelated beats or
+  silently applying only the valid subset of a corrupted source list.
+- Scoped the Pacing Revision workspace's tab, active item, selections, failed
+  preview, and edit draft to `revisionSet.id`. Replacing a revision set now
+  remounts its internal workspace state instead of carrying a prior set's draft
+  into the new set.
+- Added regression-first coverage for duplicate/missing combine sources,
+  self-anchored moves, and replacement-set edit-state isolation.
+
+### Files touched
+
+- `src/portals/writer/writerPacingRevisionOutline.ts`
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/__tests__/writerPacingRevisionOutline.test.ts`
+- `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The client apply boundary now mirrors the server's fail-closed operation
+  invariants instead of relying on an unsafe cast and filtering out missing
+  source indexes. Persisted data remains untrusted until every source and
+  anchor is resolved against the current working outline.
+- `WriterPacingRevisionWorkspace` is now a small identity-owning wrapper around
+  its stateful content. The revision-set key provides synchronous, complete
+  state disposal without an effect that would also reset ordinary same-set
+  refreshes.
+- The audit found no executable production `any`, TypeScript mismatch,
+  incorrect Vite environment declaration, unhandled public-asset base path,
+  or evidence-backed memoization target outside the corrected workspace.
+- The DOX pass left `AGENTS.md` unchanged because no durable product contract,
+  ownership boundary, permission, workflow, or child index changed.
+
+### Verification
+
+- Pre-fix operation-integrity regression: 1 file / 3 tests failed as expected.
+- Pre-fix revision identity regression: 1 of 27 tests failed as expected.
+- Focused post-fix verification: 3 files / 72 tests passed.
+- `npx tsc -b --pretty false` - PASS.
+- `npm run lint` - PASS, 0 errors and 0 ESLint warnings.
+- `npm run test -- --run --pool=threads --maxWorkers=1 --reporter=dot` - PASS,
+  198 files / 1,674 tests.
+- `npm run build` - PASS, 2,701 modules transformed.
+
+### Outstanding issues
+
+- None in the audited code paths.
+
+### Risks or caveats
+
+- Browserslist reports that `caniuse-lite` is eight months old. This remains a
+  non-blocking maintenance notice and was not changed.
+- No deployment, production-data mutation, live Supabase write, dependency
+  update, or credential access was performed.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- Continue the scheduled weekly audit from this fail-closed Pacing Revision
+  apply and set-identity baseline.
+
 ## Weekly timer ownership and cross-page comic actions audit - 2026-11-01
 
 ### What changed
